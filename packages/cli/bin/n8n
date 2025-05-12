@@ -1,5 +1,7 @@
 #!/usr/bin/env node
 
+require('global-agent/bootstrap');
+
 const path = require('path');
 
 // Make sure that it also find the config folder when it

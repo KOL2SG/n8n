@@ -8529,6 +8529,10 @@ packages:
   boolbase@1.0.0:
     resolution: {integrity: sha512-JZOSA7Mo9sNGB8+UjSgzdLtokWAky1zbztM3WRLCbZ70/3cTANmQmOdR7y2g+J0e2WXywy1yS468tY+IruqEww==}
 
+  boolean@3.2.0:
+    resolution: {integrity: sha512-d0II/GO9uf9lfUHH2BQsjxzRJZBdsjgsBiW4BvhWk/3qoKwQFjIDVN19PfX8F2D/r9PCMTtLWjYVCFrpeYUzsw==}
+    deprecated: Package no longer supported. Contact Support at https://www.npmjs.com/support for more info.
+
   bowser@2.11.0:
     resolution: {integrity: sha512-AlcaJBi/pqqJBIQ8U9Mcpc9i8Aqxn88Skv5d+xBX006BY5u8N3mGLHa5Lgppa7L/HfwgwLgZ6NYs+Ag6uUmJRA==}
 
@@ -10786,6 +10790,10 @@ packages:
     engines: {node: '>=12'}
     deprecated: Glob versions prior to v9 are no longer supported
 
+  global-agent@3.0.0:
+    resolution: {integrity: sha512-PT6XReJ+D07JvGoxQMkT6qji/jVNfX/h364XHZOWeRzy64sSFr+xJ5OX7LI3b4MPQzdL4H8Y8M0xzPpsVMwA8Q==}
+    engines: {node: '>=10.0'}
+
   global-dirs@3.0.0:
     resolution: {integrity: sha512-v8ho2DS5RiCjftj1nD9NmnfaOzTdud7RRnVd9kFNOjqZbISlx5DQ+OrTkywgd0dIt7oFCvKetZSHoHcP3sDdiA==}
     engines: {node: '>=10'}
@@ -12426,6 +12434,10 @@ packages:
     resolution: {integrity: sha512-PRsaiG84bK+AMvxziE/lCFss8juXjNaWzVbN5tXAm4XjeaS9NAHhop+PjQxz2A9h8Q4M/xGmzP8vqNwy6JeK0A==}
     engines: {node: '>= 12'}
     hasBin: true
+
+  matcher@3.0.0:
+    resolution: {integrity: sha512-OkeDaAZ/bQCxeFAozM55PKcKU0yJMPGifLwV4Qgjitu+5MoAfSQN4lsLJeXZ1b8w0x+/Emda6MZgXS1jvsapng==}
+    engines: {node: '>=10'}
 
   math-intrinsics@1.1.0:
     resolution: {integrity: sha512-/IXtbwEk5HTPyEwyKX6hGkYXxM9nbj64B+ilVJnC/R6B0pH5G4V3b0pVbL7DBj4tkhBAppbQUlf6F6Xl9LHu1g==}
@@ -14519,6 +14531,9 @@ packages:
   selderee@0.11.0:
     resolution: {integrity: sha512-5TF+l7p4+OsnP8BCCvSyZiSPc4x4//p5uPwK8TCnVPJYRmU2aYKMpOXvw8zM5a5JvuuCGN1jmsMwuU2W02ukfA==}
 
+  semver-compare@1.0.0:
+    resolution: {integrity: sha512-YM3/ITh2MJ5MtzaM429anh+x2jiLVjqILF4m4oyQB18W7Ggea7BfqdH/wGMK7dDiMghv/6WG7znWMwUDzJiXow==}
+
   semver@7.6.0:
     resolution: {integrity: sha512-EnwXhrlwXMk9gKu5/flx5sv/an57AkRplG3hTK68W7FRDN+k+OWBj65M7719OkA82XLBxrcX0KSHj+X5COhOVg==}
     engines: {node: '>=10'}
@@ -14538,6 +14553,10 @@ packages:
 
   seq-queue@0.0.5:
     resolution: {integrity: sha512-hr3Wtp/GZIc/6DAGPDcV4/9WoZhjrkXsi5B/07QgX8tsdc6ilr7BFM6PM6rbdAX1kFSDYeZGLipIZZKyQP0O5Q==}
+
+  serialize-error@7.0.1:
+    resolution: {integrity: sha512-8I8TjW5KMOKsZQTvoxjuSIa7foAwPWGOts+6o7sgjz41/qMD9VQHEDxi6PBvK2l0MXUmqZyNpUK+T2tQaaElvw==}
+    engines: {node: '>=10'}
 
   serialize-javascript@6.0.2:
     resolution: {integrity: sha512-Saa1xPByTTq2gdeFZYLLo+RFE35NHZkAbqZeWNd3BpzppeVisAqpDjcp8dyf6uIvEqJRd46jemmyA4iFIeVk8g==}
@@ -15566,6 +15585,10 @@ packages:
   type-detect@4.0.8:
     resolution: {integrity: sha512-0fr/mIH1dlO+x7TlcMy+bIDqKPsw/70tVyeHW787goQjhmqaZe10uwLujubK9q9Lg6Fiho1KUKDYz0Z7k7g5/g==}
     engines: {node: '>=4'}
+
+  type-fest@0.13.1:
+    resolution: {integrity: sha512-34R7HTnG0XIJcBSn5XhDd7nNFPRcXYRZrBB2O2jdKqYODldSzBAqzsWoZYYvduky73toYS/ESqxPvkDf/F0XMg==}
+    engines: {node: '>=10'}
 
   type-fest@0.20.2:
     resolution: {integrity: sha512-Ne+eE4r0/iWnpAxD852z3A+N0Bt5RN//NjJwRd2VFHEmrywxf5vsZlh4R6lixl6B+wz/8d+maTSAkN1FIkI3LQ==}
@@ -23545,6 +23568,8 @@ snapshots:
 
   boolbase@1.0.0: {}
 
+  boolean@3.2.0: {}
+
   bowser@2.11.0: {}
 
   brace-expansion@1.1.12:
@@ -26370,6 +26395,15 @@ snapshots:
       minimatch: 5.1.6
       once: 1.4.0
 
+  global-agent@3.0.0:
+    dependencies:
+      boolean: 3.2.0
+      es6-error: 4.1.1
+      matcher: 3.0.0
+      roarr: 2.15.4
+      semver: 7.6.0
+      serialize-error: 7.0.1
+
   global-dirs@3.0.0:
     dependencies:
       ini: 2.0.0
@@ -28438,6 +28472,10 @@ snapshots:
       uc.micro: 1.0.6
 
   marked@4.3.0: {}
+
+  matcher@3.0.0:
+    dependencies:
+      escape-string-regexp: 4.0.0
 
   math-intrinsics@1.1.0: {}
 
@@ -30976,6 +31014,8 @@ snapshots:
     dependencies:
       parseley: 0.12.1
 
+  semver-compare@1.0.0: {}
+
   semver@7.6.0:
     dependencies:
       lru-cache: 6.0.0
@@ -31005,6 +31045,10 @@ snapshots:
       upper-case-first: 2.0.2
 
   seq-queue@0.0.5: {}
+
+  serialize-error@7.0.1:
+    dependencies:
+      type-fest: 0.13.1
 
   serialize-javascript@6.0.2:
     dependencies:
@@ -32315,6 +32359,8 @@ snapshots:
       prelude-ls: 1.2.1
 
   type-detect@4.0.8: {}
+
+  type-fest@0.13.1: {}
 
   type-fest@0.20.2: {}
 
