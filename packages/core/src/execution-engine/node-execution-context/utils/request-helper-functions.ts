@@ -796,6 +796,7 @@ export function convertN8nRequestToAxios(n8nRequest: IHttpRequestOptions): Axios
 	if (host) {
 		agentOptions.servername = host;
 	}
+	// only override the agent when the user asked to skip SSL validation
 	if (n8nRequest.skipSslCertificateValidation === true) {
 		agentOptions.rejectUnauthorized = false;
 	}

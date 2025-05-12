@@ -18,8 +18,7 @@ RUN mkdir -p /src/.turbo && \
 RUN --mount=type=cache,id=pnpm-store,target=/root/.local/share/pnpm/store \
     --mount=type=cache,id=pnpm-metadata,target=/root/.cache/pnpm/metadata \
     DOCKER_BUILD=true pnpm install --frozen-lockfile
-RUN TURBO_FORCE=true 
-RUN pnpm build
+RUN TURBO_FORCE=true pnpm build
 
 # Delete all dev dependencies
 RUN jq 'del(.pnpm.patchedDependencies)' package.json > package.json.tmp; mv package.json.tmp package.json
