@@ -691,6 +691,12 @@ export async function proxyRequestToAxios(
 
 	axiosConfig = Object.assign(axiosConfig, await parseRequestObject(configObject));
 
+	Container.get(Logger).debug('[legacy proxyRequestToAxios]', {
+		url: axiosConfig.url,
+		simple: configObject.simple,
+		resolveWithFullResponse: configObject.resolveWithFullResponse,
+	});
+
 	try {
 		const response = await invokeAxios(axiosConfig, configObject.auth);
 		let body = response.data;
