@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 require('global-agent/bootstrap');
+require('../dist/bootstrap-proxy');
 
 const path = require('path');
 
