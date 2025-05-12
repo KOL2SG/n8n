@@ -1,3 +1,4 @@
+console.log('[bootstrap-proxy] interceptor loaded');
 import 'global-agent/bootstrap';
 import axios from 'axios';
 
