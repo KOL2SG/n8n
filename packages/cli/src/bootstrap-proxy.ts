@@ -26,5 +26,6 @@ axios.interceptors.request.use((config) => {
 	if (agent instanceof require('https').Agent && agent.options.rejectUnauthorized !== false) {
 		delete (config as any).httpsAgent;
 	}
+	delete (config as any).httpAgent;
 	return config;
 });
