@@ -1,14 +1,14 @@
-import { MigrationInterface, QueryRunner } from '@n8n/typeorm';
+import type { IrreversibleMigration, MigrationContext } from '@/databases/types';
 
 /**
  * Fix SQLite compatibility issues with OIDC fields
  */
-export class FixOidcColumnTypes1716138257000 implements MigrationInterface {
+export class FixOidcColumnTypes1716138257000 implements IrreversibleMigration {
 	name = 'FixOidcColumnTypes1716138257000';
 
-	public async up(queryRunner: QueryRunner): Promise<void> {
+	async up({ queryRunner, tablePrefix }: MigrationContext): Promise<void> {
 		// Check if the user table exists
-		const userTable = await queryRunner.getTable('user');
+		const userTable = await queryRunner.getTable(`${tablePrefix}user`);
 		if (!userTable) {
 			console.log('User table not found, skipping OIDC fields fix');
 			return;
@@ -20,27 +20,29 @@ export class FixOidcColumnTypes1716138257000 implements MigrationInterface {
 
 		// If columns don't exist, add them with correct TEXT type
 		if (!oidcSubjectColumn) {
-			await queryRunner.query('ALTER TABLE "user" ADD COLUMN "oidcSubject" TEXT');
+			await queryRunner.query(`ALTER TABLE ${tablePrefix}"user" ADD COLUMN "oidcSubject" TEXT`);
 			// Create index for oidcSubject
-			await queryRunner.query('CREATE INDEX "IDX_user_oidcSubject" ON "user" ("oidcSubject")');
+			await queryRunner.query(
+				`CREATE INDEX "IDX_user_oidcSubject" ON ${tablePrefix}"user" ("oidcSubject")`,
+			);
 			console.log('Added oidcSubject column with TEXT type');
 		} else {
 			console.log('oidcSubject column already exists, checking type compatibility');
 			// If column exists but has wrong type, we need to fix with table recreation
 			// This is complex in SQLite, so we'll attempt to check type
-			const columnInfo = await queryRunner.query(`PRAGMA table_info("user")`);
+			const columnInfo = await queryRunner.query(`PRAGMA table_info("${tablePrefix}user")`);
 			const oidcSubjectInfo = columnInfo.find((col: any) => col.name === 'oidcSubject');
 
 			if (oidcSubjectInfo && oidcSubjectInfo.type !== 'TEXT') {
 				console.log('oidcSubject has incompatible type, fixing...');
 				// SQLite doesn't allow ALTER COLUMN, so we need table recreation
-				await this.recreateUserTableWithCorrectTypes(queryRunner);
+				await this.recreateUserTableWithCorrectTypes(queryRunner, tablePrefix);
 				return; // Skip further steps as table was recreated with all fixes
 			}
 		}
 
 		if (!oidcIssuerColumn) {
-			await queryRunner.query('ALTER TABLE "user" ADD COLUMN "oidcIssuer" TEXT');
+			await queryRunner.query(`ALTER TABLE ${tablePrefix}"user" ADD COLUMN "oidcIssuer" TEXT`);
 			console.log('Added oidcIssuer column with TEXT type');
 		} else {
 			console.log('oidcIssuer column already exists');
@@ -51,16 +53,21 @@ export class FixOidcColumnTypes1716138257000 implements MigrationInterface {
 	/**
 	 * Helper method to recreate the user table with correct column types
 	 */
-	private async recreateUserTableWithCorrectTypes(queryRunner: QueryRunner): Promise<void> {
+	private async recreateUserTableWithCorrectTypes(
+		queryRunner: any,
+		tablePrefix: string,
+	): Promise<void> {
 		// Get all column information
-		const columnInfo = await queryRunner.query(`PRAGMA table_info("user")`);
+		const columnInfo = await queryRunner.query(`PRAGMA table_info("${tablePrefix}user")`);
 
 		// Create a backup table
-		await queryRunner.query('CREATE TABLE "user_backup" AS SELECT * FROM "user"');
+		await queryRunner.query(
+			`CREATE TABLE "${tablePrefix}user_backup" AS SELECT * FROM "${tablePrefix}user"`,
+		);
 		console.log('Created user_backup table with current data');
 
 		// Drop the original table
-		await queryRunner.query('DROP TABLE "user"');
+		await queryRunner.query(`DROP TABLE "${tablePrefix}user"`);
 
 		// Create list of all columns except OIDC columns
 		const columnDefinitions = columnInfo
@@ -74,7 +81,7 @@ export class FixOidcColumnTypes1716138257000 implements MigrationInterface {
 
 		// Create new table with correct column types
 		await queryRunner.query(`
-			CREATE TABLE "user" (
+			CREATE TABLE "${tablePrefix}user" (
 				${columnDefinitions},
 				"oidcSubject" TEXT,
 				"oidcIssuer" TEXT
@@ -83,15 +90,17 @@ export class FixOidcColumnTypes1716138257000 implements MigrationInterface {
 		console.log('Recreated user table with correct column types');
 
 		// Copy data from backup
-		await queryRunner.query('INSERT INTO "user" SELECT * FROM "user_backup"');
+		await queryRunner.query(
+			`INSERT INTO "${tablePrefix}user" SELECT * FROM "${tablePrefix}user_backup"`,
+		);
 		console.log('Restored data from backup');
 
 		// Drop backup table
-		await queryRunner.query('DROP TABLE "user_backup"');
+		await queryRunner.query(`DROP TABLE "${tablePrefix}user_backup"`);
 
 		// Recreate indexes
 		const indexInfo = await queryRunner.query(
-			`SELECT * FROM sqlite_master WHERE type='index' AND tbl_name='user'`,
+			`SELECT * FROM sqlite_master WHERE type='index' AND tbl_name='${tablePrefix}user'`,
 		);
 		for (const index of indexInfo) {
 			if (!index.sql) continue;
@@ -106,16 +115,12 @@ export class FixOidcColumnTypes1716138257000 implements MigrationInterface {
 		// Ensure we have an index for oidcSubject
 		try {
 			await queryRunner.query(
-				'CREATE INDEX IF NOT EXISTS "IDX_user_oidcSubject" ON "user" ("oidcSubject")',
+				`CREATE INDEX IF NOT EXISTS "IDX_user_oidcSubject" ON "${tablePrefix}user" ("oidcSubject")`,
 			);
 		} catch (error) {
 			console.log('Error creating oidcSubject index', error);
 		}
 	}
 
-	public async down(queryRunner: QueryRunner): Promise<void> {
-		// No down migration needed as we're just fixing column types
-		// SQLite doesn't support dropping columns anyway
-		console.log('No down migration needed for OIDC column type fix');
-	}
+	// This is an irreversible migration - no down method
 }
