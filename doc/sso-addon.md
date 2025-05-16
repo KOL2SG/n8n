@@ -209,71 +209,149 @@ Replace `<your-n8n-host>`, client ID/secret, and adjust resources as needed to m
 - [x] Login flow redirection to OIDC when enabled
 - [x] Database schema updates for OIDC user mapping
 - [x] Configuration options for controlling OIDC behavior
+- [x] TypeScript type declarations and type-safe utilities
+- [x] Code quality improvements and error handling
+- [x] TypeScript build compatibility fixes
 - [ ] Unit tests for OIDC components
 - [ ] Integration tests with a mock OIDC provider
 
-## Known Issues and Solutions
+## Implementation Details
 
-### TypeScript Type Compatibility
+### TypeScript Type System Integration
 
-1. **Config Path Type Errors**
+1. **Type Declaration Files**
 
-   The current implementation uses `config.getEnv('sso.oidcEnabled')` which causes TypeScript errors because the path is not included in the `ConfigOptionPath` type. 
-
-   **Fix**: Add type assertions or update the ConfigOptionPath type definition:
+   Created declaration files to properly extend the TypeScript type system:
 
    ```typescript
-   // Using type assertion
-   const oidcEnabled = config.getEnv('sso.oidcEnabled' as any) as boolean;
-   
-   // Or define custom config option paths
+   // /packages/cli/src/types/config.d.ts
    declare module '@n8n/config' {
      interface ConfigOptionPathMap {
        'sso.oidcEnabled': boolean;
-       // Add other OIDC paths...
+       'oidc.issuerUrl': string;
+       'oidc.clientId': string;
+       'oidc.clientSecret': string;
+       'oidc.redirectUri': string;
+       'oidc.scopes': string;
+       'oidc.jitProvisioning': boolean;
+       'oidc.redirectLoginToSso': boolean;
+     }
+   }
+
+   // /packages/cli/src/types/auth.d.ts
+   declare module '@/auth/auth.service' {
+     type AuthenticationMethod = 'email' | 'ldap' | 'saml' | 'oidc';
+   }
+
+   // Event payload types for auth events
+   declare module '@/events/event.service' {
+     interface EventPayloadLoginFailed {
+       authenticationMethod: 'email' | 'ldap' | 'saml' | 'oidc';
+       userEmail: string;
+       reason: string;
+     }
+     
+     interface EventPayloadLoggedIn {
+       user: any;
+       authenticationMethod: 'email' | 'ldap' | 'saml' | 'oidc';
      }
    }
    ```
 
-2. **Authentication Method Type Mismatch**
+2. **Type-Safe Config Helper Utilities**
 
-   The `AuthProviderType` includes `'oidc'` but `AuthenticationMethod` may not, causing type compatibility issues.
-
-   **Fix**: Update type definitions to align these types:
+   Created helper utilities to safely access configuration settings, eliminating type errors:
 
    ```typescript
-   // In types definition file
-   export type AuthenticationMethod = 'email' | 'ldap' | 'saml' | 'oidc';
+   // /packages/cli/src/sso.cc/utils/config-helper.ts
+   export function getOidcEnabled(): boolean {
+     return Boolean(config.getEnv('sso.oidcEnabled' as any));
+   }
+
+   export function getOidcIssuerUrl(): string {
+     return String(config.getEnv('oidc.issuerUrl' as any) || '');
+   }
+   // Other helper functions...
    ```
 
-### Error Handling Improvements
+### Error Handling and Code Quality
 
-1. **Token Validation**
+1. **Comprehensive Error Logging**
 
-   Improve error handling during token validation and user lookup/creation:
+   Implemented detailed error logging throughout the authentication flow:
 
    ```typescript
    try {
      // Token validation code
    } catch (error) {
-     this.logger.error('OIDC token validation failed', { 
+     this.logger.error('OIDC authentication failed', { 
        error: error instanceof Error ? error.message : String(error),
        issuer: tokenClaims.iss,
-       // Don't log sensitive information like tokens or user IDs
+       // Redacted sensitive information
      });
      throw new AuthError('Authentication failed');
    }
    ```
 
-2. **Race Conditions in Configuration Loading**
+2. **Authentication Method Fixes**
 
-   The current implementation might have race conditions between config registration and usage.
+   Fixed incorrect method usage for user authentication:
+   
+   ```typescript
+   // Before: Incorrect parameter passing
+   await this.authService.issueJWT(user, res); // Error: res is Response but string expected
+   
+   // After: Using the correct method
+   this.authService.issueCookie(res, user); // Correct: Takes Response as first parameter
+   ```
+   
+3. **Resource Cleanup**
 
-   **Fix**: Ensure configuration is loaded synchronously at startup before any authentication flow begins.
+   Added proper cleanup of sensitive data:
+   
+   ```typescript
+   // Clear the PKCE verifier and nonce after use
+   this.pkceVerifier = null;
+   this.nonce = null;
+   ```
+   
+4. **Type-Safe Query Handling**
+
+   Improved request query handling for better type safety:
+   
+   ```typescript
+   // Properly type the query parameters
+   const queryParams = req.query as Record<string, string | string[]>;
+   const tokenSet = await this.oidcService.handleCallback(queryParams);
+   ```
 
 ## Installation and Configuration
 
-### 1. Install Required Dependencies
+### 1. Database Migration
+
+The OIDC implementation requires database schema updates to add the following columns to the user table:
+- `oidcSubject`: Store the OIDC subject identifier (nullable string)
+- `oidcIssuer`: Store the issuer URL (nullable string)
+
+These changes require a manual migration step. Here's how to run it:
+
+```bash
+# Run the migration command inside your n8n installation
+n8n database:migrate
+
+# For Docker installations
+docker exec -it your-n8n-container n8n database:migrate
+```
+
+Alternatively, you can set the following environment variable to automatically run migrations at startup:
+
+```bash
+N8N_DB_MIGRATE_ON_STARTUP=true
+```
+
+> **Important**: Always backup your database before running migrations in production environments.
+
+### 2. Install Required Dependencies
 
 The OIDC SSO implementation requires the `openid-client` package. Install it using:
 

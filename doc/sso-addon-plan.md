@@ -59,6 +59,7 @@ The implemented OIDC SSO solution follows this flow:
 #### 1. Database Updates
 - Added `oidcSubject` and `oidcIssuer` columns to the User entity
 - Updated the User entity to include these new fields
+- Added migration instructions to documentation (both manual and automatic options)
 
 #### 2. Feature Flag Protection
 - All OIDC functionality is guarded by the `sso.oidcEnabled` feature flag
@@ -96,15 +97,36 @@ The implementation supports these configuration parameters:
 - `oidc.jitProvisioning`: Enable/disable just-in-time user creation
 - `oidc.redirectLoginToSso`: Automatically redirect login page to SSO
 
+### Resolved Issues
+
+1. **TypeScript Type Compatibility** 
+   - Created declaration files in `/packages/cli/src/types/` to extend TypeScript type system
+   - Added missing type definitions for config paths, authentication methods and event payloads
+   - Implemented type-safe utility functions to access configuration values
+   - Added appropriate type assertions to handle API mismatches
+
+### Remaining Issues
+
+1. **ESLint Configuration**
+   - ESLint warnings about TSConfig not including new files
+   - Not critical for functionality but should be addressed for clean linting 
+
 ### Pending Tasks
 
 1. **Implementation Refinement and Bug Fixes**:
-   - ✓ Package `openid-client` is installed and implemented 
-   - Need to fix TypeScript errors with config paths and authentication method types
-   - Improve error handling in token validation and callback processing
-   - Fix potential race conditions in config registration/loading
-   - Add comprehensive logging for OIDC authentication flow
-   - Ensure proper cleanup of PKCE verifier and nonce after use
+   - ✓ Package `openid-client` is installed and implemented
+   - ✓ Fixed TypeScript errors with config paths and authentication method types
+   - ✓ Created type-safe config helper utilities
+   - ✓ Added proper type declarations for config paths and authentication methods
+   - ✓ Added type declarations for event payload interfaces
+   - ✓ Fixed method signature mismatches (issueCookie vs issueJWT)
+   - ✓ Improved error handling in token validation and callback processing
+   - ✓ Fixed potential race conditions in config registration/loading
+   - ✓ Added comprehensive logging for OIDC authentication flow
+   - ✓ Ensured proper cleanup of PKCE verifier and nonce after use
+   - ✓ Fixed query parameter type handling for the callback endpoint
+
+2. **Remaining Testing Tasks**:
 
 2. **Done: Login Flow Integration**:
    - ✓ Updated `AuthController.login()` to redirect to OIDC when enabled

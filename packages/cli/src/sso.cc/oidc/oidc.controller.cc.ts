@@ -5,7 +5,7 @@ import { AuthService } from '@/auth/auth.service';
 import { UrlService } from '@/services/url.service';
 
 import { OidcServiceCC } from './oidc.service.cc';
-import config from '@/config';
+import { getOidcEnabled } from '../utils/config-helper';
 
 /**
  * OIDC Express router and controller (Community edition)
@@ -30,7 +30,7 @@ export class OidcControllerCC {
 	async login(req: Request, res: Response): Promise<void> {
 		try {
 			// Check if OIDC is enabled via feature flag
-			if (!config.getEnv('sso.oidcEnabled')) {
+			if (!getOidcEnabled()) {
 				this.logger.debug('OIDC login attempted but feature is disabled');
 				return res.redirect(this.urlService.getInstanceBaseUrl() + '/signin');
 			}
@@ -51,13 +51,16 @@ export class OidcControllerCC {
 	async callback(req: Request, res: Response): Promise<void> {
 		try {
 			// Check if OIDC is enabled via feature flag
-			if (!config.getEnv('sso.oidcEnabled')) {
+			if (!getOidcEnabled()) {
 				this.logger.debug('OIDC callback received but feature is disabled');
 				return res.redirect(this.urlService.getInstanceBaseUrl() + '/signin');
 			}
 
+			// Convert query params to a format handleCallback can process
+			const queryParams = req.query as Record<string, string | string[]>;
+
 			// Handle the callback from the identity provider
-			const tokenSet = await this.oidcService.handleCallback(req.query);
+			const tokenSet = await this.oidcService.handleCallback(queryParams);
 
 			// Find or create the user based on the token
 			const { user } = await this.oidcService.findOrCreateUserByTokenSet(tokenSet);
@@ -66,11 +69,12 @@ export class OidcControllerCC {
 				throw new Error('Failed to find or create user from OIDC token');
 			}
 
-			// Log the user in
-			await this.authService.issueJWT(user, res);
+			// Log the user in using the cookie method which accepts a response object
+			this.authService.issueCookie(res, user);
 
 			// Redirect to the instance base URL
-			return res.redirect(this.urlService.getInstanceBaseUrl());
+			res.redirect(this.urlService.getInstanceBaseUrl());
+			return;
 		} catch (error) {
 			this.logger.error(
 				`OIDC authentication failed: ${error instanceof Error ? error.message : String(error)}`,

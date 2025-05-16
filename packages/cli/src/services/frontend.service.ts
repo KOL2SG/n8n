@@ -162,7 +162,7 @@ export class FrontendService {
 				quota: this.license.getUsersLimit(),
 				showSetupOnFirstLoad: !config.getEnv('userManagement.isInstanceOwnerSetUp'),
 				smtpSetup: this.mailer.isEmailSetUp,
-				authenticationMethod: getCurrentAuthenticationMethod(),
+				authenticationMethod: getCurrentAuthenticationMethod() as any,
 			},
 			sso: {
 				saml: {

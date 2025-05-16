@@ -3,7 +3,6 @@ import { Service } from '@n8n/di';
 import { Logger } from 'n8n-core';
 import { ApplicationError } from 'n8n-workflow';
 
-import config from '@/config';
 import { BadRequestError } from '@/errors/response-errors/bad-request.error';
 import { UrlService } from '@/services/url.service';
 import { AuthService } from '@/auth/auth.service';
@@ -12,6 +11,16 @@ import {
 	isOidcCurrentAuthenticationMethod,
 	isSsoJustInTimeProvisioningEnabled,
 } from '../sso-helpers.cc';
+import {
+	getOidcEnabled,
+	getOidcIssuerUrl,
+	getOidcClientId,
+	getOidcClientSecret,
+	getOidcRedirectUri,
+	getOidcScopes,
+	getOidcJitProvisioning,
+	getOidcRedirectLoginToSso,
+} from '../utils/config-helper';
 
 // Use CommonJS require to bypass TypeScript issues
 // eslint-disable-next-line @typescript-eslint/no-var-requires
@@ -45,7 +54,7 @@ export class OidcServiceCC {
 	async init(): Promise<void> {
 		try {
 			// Check if the OIDC feature flag is enabled
-			const featureEnabled = config.getEnv('sso.oidcEnabled');
+			const featureEnabled = getOidcEnabled();
 			if (featureEnabled) {
 				await this.initClient();
 			}
@@ -92,13 +101,13 @@ export class OidcServiceCC {
 
 	getConfigPreferences(): OidcPreferences {
 		return {
-			issuerUrl: (config.getEnv('oidc.issuerUrl') as string) || '',
-			clientId: (config.getEnv('oidc.clientId') as string) || '',
-			clientSecret: (config.getEnv('oidc.clientSecret') as string) || '',
-			redirectUri: (config.getEnv('oidc.redirectUri') as string) || '',
-			scopes: ((config.getEnv('oidc.scopes') as string) || 'openid email profile').split(' '),
-			jitProvisioning: config.getEnv('oidc.jitProvisioning') !== false,
-			redirectLoginToSso: config.getEnv('oidc.redirectLoginToSso') === true,
+			issuerUrl: getOidcIssuerUrl(),
+			clientId: getOidcClientId(),
+			clientSecret: getOidcClientSecret(),
+			redirectUri: getOidcRedirectUri(),
+			scopes: getOidcScopes(),
+			jitProvisioning: getOidcJitProvisioning(),
+			redirectLoginToSso: getOidcRedirectLoginToSso(),
 		};
 	}
 
@@ -136,7 +145,7 @@ export class OidcServiceCC {
 		});
 	}
 
-	async handleCallback(callbackParams: any): Promise<any> {
+	async handleCallback(callbackParams: Record<string, string | string[]>): Promise<any> {
 		if (!this.isInitialized()) {
 			throw new BadRequestError('OIDC client not initialized');
 		}

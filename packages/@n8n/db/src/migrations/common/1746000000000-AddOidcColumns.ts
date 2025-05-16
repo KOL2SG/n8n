@@ -8,11 +8,11 @@ export class AddOidcColumns1746000000000 implements ReversibleMigration {
 		]);
 
 		// Add index on oidcSubject for faster lookups during authentication
-		await createIndex('user', ['oidcSubject'], { name: 'IDX_USER_OIDC_SUBJECT' });
+		await createIndex('user', ['oidcSubject']);
 	}
 
 	async down({ schemaBuilder: { dropColumns, dropIndex } }: MigrationContext) {
-		await dropIndex('user', 'IDX_USER_OIDC_SUBJECT');
+		await dropIndex('user', ['oidcSubject']);
 		await dropColumns('user', ['oidcSubject', 'oidcIssuer']);
 	}
 }

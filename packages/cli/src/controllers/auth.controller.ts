@@ -20,6 +20,7 @@ import { PostHogClient } from '@/posthog';
 import { AuthlessRequest } from '@/requests';
 import { UserService } from '@/services/user.service';
 import { UrlService } from '@/services/url.service';
+import { getOidcEnabled } from '@/sso.cc/utils/config-helper';
 import {
 	getCurrentAuthenticationMethod,
 	isLdapCurrentAuthenticationMethod,
@@ -53,7 +54,7 @@ export class AuthController {
 		@Body payload: LoginRequestDto,
 	): Promise<PublicUser | undefined> {
 		// Check if OIDC is enabled and if redirection to SSO is enabled
-		const oidcEnabled = Boolean(config.getEnv('sso.oidcEnabled'));
+		const oidcEnabled = getOidcEnabled();
 		if (oidcEnabled && isOidcCurrentAuthenticationMethod() && doRedirectUsersFromLoginToSsoFlow()) {
 			this.logger.debug('Redirecting to OIDC login flow');
 			res.redirect(`${this.urlService.getInstanceBaseUrl()}/sso/oidc/login`);
@@ -117,7 +118,7 @@ export class AuthController {
 
 			this.eventService.emit('user-logged-in', {
 				user,
-				authenticationMethod: usedAuthenticationMethod,
+				authenticationMethod: usedAuthenticationMethod as any,
 			});
 
 			return await this.userService.toPublic(user, {
@@ -127,7 +128,7 @@ export class AuthController {
 			});
 		}
 		this.eventService.emit('user-login-failed', {
-			authenticationMethod: usedAuthenticationMethod,
+			authenticationMethod: usedAuthenticationMethod as any,
 			userEmail: emailOrLdapLoginId,
 			reason: 'wrong credentials',
 		});
