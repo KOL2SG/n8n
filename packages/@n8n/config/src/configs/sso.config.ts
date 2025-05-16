@@ -1,48 +1,53 @@
+import { z } from 'zod';
+
 import { Config, Env, Nested } from '../decorators';
 
 @Config
-class SamlConfig {
-	/** Whether to enable SAML SSO. */
-	@Env('N8N_SSO_SAML_LOGIN_ENABLED')
-	loginEnabled: boolean = false;
-
-	@Env('N8N_SSO_SAML_LOGIN_LABEL')
-	loginLabel: string = '';
-}
-
-@Config
 class OidcConfig {
-	/** Whether to enable OIDC SSO. */
-	@Env('N8N_SSO_OIDC_LOGIN_ENABLED')
-	loginEnabled: boolean = false;
-}
+	/** OIDC Issuer URL */
+	@Env('OIDC_ISSUER_URL')
+	issuerUrl: string = '';
 
-@Config
-class LdapConfig {
-	/** Whether to enable LDAP SSO. */
-	@Env('N8N_SSO_LDAP_LOGIN_ENABLED')
-	loginEnabled: boolean = false;
+	/** OIDC Client ID */
+	@Env('OIDC_CLIENT_ID')
+	clientId: string = '';
 
-	@Env('N8N_SSO_LDAP_LOGIN_LABEL')
-	loginLabel: string = '';
+	/** OIDC Client Secret */
+	@Env('OIDC_CLIENT_SECRET')
+	clientSecret: string = '';
+
+	/** OIDC Redirect URI */
+	@Env('OIDC_REDIRECT_URI')
+	redirectUri: string = '';
+
+	/** OIDC Scopes (space-separated) */
+	@Env('OIDC_SCOPES')
+	scopes: string = 'openid email profile';
+
+	/** Whether to enable Just-In-Time provisioning */
+	@Env('OIDC_JIT_PROVISIONING')
+	jitProvisioning: boolean = true;
+
+	/** Whether to redirect login page to SSO */
+	@Env('OIDC_REDIRECT_LOGIN_TO_SSO')
+	redirectLoginToSso: boolean = false;
 }
 
 @Config
 export class SsoConfig {
-	/** Whether to create users when they log in via SSO. */
-	@Env('N8N_SSO_JUST_IN_TIME_PROVISIONING')
-	justInTimeProvisioning: boolean = true;
+	/** Whether to enable OIDC SSO */
+	@Env('SSO_OIDC_ENABLED')
+	oidcEnabled: boolean = false;
 
-	/** Whether to redirect users from the login dialog to initialize SSO flow. */
-	@Env('N8N_SSO_REDIRECT_LOGIN_TO_SSO')
-	redirectLoginToSso: boolean = true;
+	/** Whether to enable just-in-time user provisioning on login */
+	@Env('SSO_JUST_IN_TIME_PROVISIONING')
+	justInTimeProvisioning: boolean = false;
 
-	@Nested
-	saml: SamlConfig;
+	/** Whether to redirect users from login page to SSO */
+	@Env('SSO_REDIRECT_LOGIN_TO_SSO')
+	redirectLoginToSso: boolean = false;
 
+	/** OIDC configuration */
 	@Nested
 	oidc: OidcConfig;
-
-	@Nested
-	ldap: LdapConfig;
 }

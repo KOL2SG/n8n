@@ -53,9 +53,9 @@ export class User extends WithTimestamps implements IUser, AuthPrincipal {
 	@Length(1, 32, { message: 'Last name must be $constraint1 to $constraint2 characters long.' })
 	lastName: string;
 
-	@Column({ type: String, nullable: true })
+	@Column({ nullable: true })
 	@IsString({ message: 'Password must be of type string.' })
-	password: string | null;
+	password: string;
 
 	@JsonColumn({
 		nullable: true,
@@ -96,14 +96,12 @@ export class User extends WithTimestamps implements IUser, AuthPrincipal {
 	@Column({ type: Boolean, default: false })
 	mfaEnabled: boolean;
 
-	@Column({ type: String, nullable: true })
-	mfaSecret?: string | null;
+	@Column({ length: 255, nullable: true })
+	@Index()
+	oidcSubject: string | null;
 
-	@Column({ type: 'simple-array', default: '' })
-	mfaRecoveryCodes: string[];
-
-	@Column({ type: 'date', nullable: true })
-	lastActiveAt?: Date | null;
+	@Column({ length: 255, nullable: true })
+	oidcIssuer: string | null;
 
 	/**
 	 * Whether the user is pending setup completion.
@@ -117,7 +115,7 @@ export class User extends WithTimestamps implements IUser, AuthPrincipal {
 	}
 
 	toJSON() {
-		const { password, mfaSecret, mfaRecoveryCodes, ...rest } = this;
+		const { password, ...rest } = this;
 		return rest;
 	}
 

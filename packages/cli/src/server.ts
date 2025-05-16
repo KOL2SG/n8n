@@ -1,20 +1,18 @@
-import { CLI_DIR, EDITOR_UI_DIST_DIR, inE2ETests, N8N_VERSION } from '@/constants';
 import { inDevelopment, inProduction } from '@n8n/backend-common';
 import { SecurityConfig } from '@n8n/config';
-import { Time } from '@n8n/constants';
-import type { APIRequest } from '@n8n/db';
 import { Container, Service } from '@n8n/di';
 import cookieParser from 'cookie-parser';
 import express from 'express';
 import { access as fsAccess } from 'fs/promises';
 import helmet from 'helmet';
-import isEmpty from 'lodash/isEmpty';
+import { isEmpty } from 'lodash';
 import { InstanceSettings } from 'n8n-core';
 import { jsonParse } from 'n8n-workflow';
 import { resolve } from 'path';
 
 import { AbstractServer } from '@/abstract-server';
 import config from '@/config';
+import { CLI_DIR, EDITOR_UI_DIST_DIR, inE2ETests, N8N_VERSION, Time } from '@/constants';
 import { ControllerRegistry } from '@/controller.registry';
 import { CredentialsOverwrites } from '@/credentials-overwrites';
 import { MessageEventBus } from '@/eventbus/message-event-bus/message-event-bus';
@@ -27,6 +25,7 @@ import { handleMfaDisable, isMfaFeatureEnabled } from '@/mfa/helpers';
 import { PostHogClient } from '@/posthog';
 import { isApiEnabled, loadPublicApiVersions } from '@/public-api';
 import { Push } from '@/push';
+import type { APIRequest } from '@/requests';
 import * as ResponseHelper from '@/response-helper';
 import type { FrontendService } from '@/services/frontend.service';
 
@@ -50,6 +49,9 @@ import '@/controllers/tags.controller';
 import '@/controllers/translation.controller';
 import '@/controllers/folder.controller';
 import '@/controllers/users.controller';
+
+// Import SSO config
+import '@/sso.cc/sso.config';
 import '@/controllers/user-settings.controller';
 import '@/controllers/workflow-statistics.controller';
 import '@/controllers/api-keys.controller';
@@ -57,15 +59,13 @@ import '@/credentials/credentials.controller';
 import '@/eventbus/event-bus.controller';
 import '@/events/events.controller';
 import '@/executions/executions.controller';
+import '@/external-secrets.ee/external-secrets.controller.ee';
 import '@/license/license.controller';
+import '@/evaluation.ee/test-definitions.controller.ee';
 import '@/evaluation.ee/test-runs.controller.ee';
 import '@/workflows/workflow-history.ee/workflow-history.controller.ee';
 import '@/workflows/workflows.controller';
 import '@/webhooks/webhooks.controller';
-
-import { ChatServer } from './chat/chat-server';
-
-import { MfaService } from './mfa/mfa.service';
 
 @Service()
 export class Server extends AbstractServer {
@@ -128,7 +128,6 @@ export class Server extends AbstractServer {
 		}
 
 		if (isMfaFeatureEnabled()) {
-			await Container.get(MfaService).init();
 			await import('@/controllers/mfa.controller');
 		}
 
@@ -154,21 +153,27 @@ export class Server extends AbstractServer {
 			this.logger.warn(`SAML initialization failed: ${(error as Error).message}`);
 		}
 
-		if (this.globalConfig.diagnostics.enabled) {
-			await import('@/controllers/telemetry.controller');
-		}
-
-		// ----------------------------------------
-		// OIDC
-		// ----------------------------------------
-
+		// OIDC (Community Edition)
 		try {
-			// in the short term, we load the OIDC module here to ensure it is initialized
-			// ideally we want to migrate this to a module and be able to load it dynamically
-			// when the license changes, but that requires some refactoring
-			const { OidcService } = await import('@/sso.ee/oidc/oidc.service.ee');
-			await Container.get(OidcService).init();
-			await import('@/sso.ee/oidc/routes/oidc.controller.ee');
+			// initialize OIDC service if feature flag is enabled
+			const oidcEnabled = config.getEnv('sso.oidcEnabled') as boolean;
+			if (oidcEnabled) {
+				try {
+					// Initialize the OIDC service first
+					const { OidcServiceCC } = await import('@/sso.cc/oidc/oidc.service.cc');
+					await Container.get(OidcServiceCC).init();
+
+					// Then register the OIDC controller
+					const { registerOidcController } = await import('@/sso.cc/oidc/oidc.controller.cc');
+					registerOidcController(this.app);
+					this.logger.debug('OIDC controller and service initialized successfully');
+				} catch (error) {
+					this.logger.error(
+						`Failed to initialize OIDC controller: ${error instanceof Error ? error.message : error}`,
+					);
+				}
+			}
+			this.logger.debug('OIDC SSO (Community Edition) initialized successfully');
 		} catch (error) {
 			this.logger.warn(`OIDC initialization failed: ${(error as Error).message}`);
 		}
@@ -176,21 +181,15 @@ export class Server extends AbstractServer {
 		// ----------------------------------------
 		// Source Control
 		// ----------------------------------------
-
 		try {
 			const { SourceControlService } = await import(
 				'@/environments.ee/source-control/source-control.service.ee'
 			);
 			await Container.get(SourceControlService).init();
 			await import('@/environments.ee/source-control/source-control.controller.ee');
-		} catch (error) {
-			this.logger.warn(`Source control initialization failed: ${(error as Error).message}`);
-		}
-
-		try {
 			await import('@/environments.ee/variables/variables.controller.ee');
 		} catch (error) {
-			this.logger.warn(`Variables initialization failed: ${(error as Error).message}`);
+			this.logger.warn(`Source Control initialization failed: ${(error as Error).message}`);
 		}
 	}
 
@@ -264,9 +263,7 @@ export class Server extends AbstractServer {
 
 		// Returns all the available timezones
 		const tzDataFile = resolve(CLI_DIR, 'dist/timezones.json');
-		this.app.get(`/${this.restEndpoint}/options/timezones`, (_, res) =>
-			res.sendFile(tzDataFile, { dotfiles: 'allow' }),
-		);
+		this.app.get(`/${this.restEndpoint}/options/timezones`, (_, res) => res.sendFile(tzDataFile));
 
 		// ----------------------------------------
 		// Settings
@@ -279,27 +276,19 @@ export class Server extends AbstractServer {
 				ResponseHelper.send(async () => frontendService.getSettings()),
 			);
 
-			// Returns settings for all loaded modules
-			this.app.get(
-				`/${this.restEndpoint}/module-settings`,
-				ResponseHelper.send(async () => frontendService.getModuleSettings()),
-			);
-
-			this.app.get(`/${this.restEndpoint}/config.js`, (_req, res) => {
-				const frontendSentryConfig = JSON.stringify({
-					dsn: this.globalConfig.sentry.frontendDsn,
-					environment: process.env.ENVIRONMENT || 'development',
-					serverName: process.env.DEPLOYMENT_NAME,
-					release: `n8n@${N8N_VERSION}`,
-				});
-				const frontendConfig = [
-					`window.BASE_PATH = '${this.globalConfig.path}';`,
-					`window.REST_ENDPOINT = '${this.globalConfig.endpoints.rest}';`,
-					`window.sentry = ${frontendSentryConfig};`,
-				].join('\n');
-
-				res.type('application/javascript');
-				res.send(frontendConfig);
+			// Return Sentry config as a static file
+			this.app.get(`/${this.restEndpoint}/sentry.js`, (_, res) => {
+				res.type('js');
+				res.write('window.sentry=');
+				res.write(
+					JSON.stringify({
+						dsn: this.globalConfig.sentry.frontendDsn,
+						environment: process.env.ENVIRONMENT || 'development',
+						serverName: process.env.DEPLOYMENT_NAME,
+						release: `n8n@${N8N_VERSION}`,
+					}),
+				);
+				res.end();
 			});
 		}
 
@@ -378,7 +367,7 @@ export class Server extends AbstractServer {
 				if (filePath) {
 					try {
 						await fsAccess(filePath);
-						return res.sendFile(filePath, { ...cacheOptions, dotfiles: 'allow' });
+						return res.sendFile(filePath, cacheOptions);
 					} catch {}
 				}
 				res.sendStatus(404);
@@ -394,13 +383,11 @@ export class Server extends AbstractServer {
 					errorMessage: 'The contentSecurityPolicy is not valid JSON.',
 				},
 			);
-			const cspReportOnly = Container.get(SecurityConfig).contentSecurityPolicyReportOnly;
 			const securityHeadersMiddleware = helmet({
 				contentSecurityPolicy: isEmpty(cspDirectives)
 					? false
 					: {
 							useDefaults: false,
-							reportOnly: cspReportOnly,
 							directives: {
 								...cspDirectives,
 							},
@@ -424,7 +411,7 @@ export class Server extends AbstractServer {
 			});
 
 			// Route all UI urls to index.html to support history-api
-			const nonUIRoutes: readonly string[] = [
+			const nonUIRoutes: Readonly<string[]> = [
 				'favicon.ico',
 				'assets',
 				'static',
@@ -481,6 +468,5 @@ export class Server extends AbstractServer {
 	protected setupPushServer(): void {
 		const { restEndpoint, server, app } = this;
 		Container.get(Push).setupPushServer(restEndpoint, server, app);
-		Container.get(ChatServer).setup(server, app);
 	}
 }
