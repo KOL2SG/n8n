@@ -19,11 +19,17 @@ import { MfaService } from '@/mfa/mfa.service';
 import { PostHogClient } from '@/posthog';
 import { AuthlessRequest } from '@/requests';
 import { UserService } from '@/services/user.service';
+import { UrlService } from '@/services/url.service';
 import {
 	getCurrentAuthenticationMethod,
 	isLdapCurrentAuthenticationMethod,
 	isSamlCurrentAuthenticationMethod,
 } from '@/sso.ee/sso-helpers';
+import {
+	isOidcCurrentAuthenticationMethod,
+	doRedirectUsersFromLoginToSsoFlow,
+} from '@/sso.cc/sso-helpers.cc';
+import config from '@/config';
 
 @RestController()
 export class AuthController {
@@ -35,6 +41,7 @@ export class AuthController {
 		private readonly license: License,
 		private readonly userRepository: UserRepository,
 		private readonly eventService: EventService,
+		private readonly urlService: UrlService,
 		private readonly postHog?: PostHogClient,
 	) {}
 
@@ -45,6 +52,14 @@ export class AuthController {
 		res: Response,
 		@Body payload: LoginRequestDto,
 	): Promise<PublicUser | undefined> {
+		// Check if OIDC is enabled and if redirection to SSO is enabled
+		const oidcEnabled = Boolean(config.getEnv('sso.oidcEnabled'));
+		if (oidcEnabled && isOidcCurrentAuthenticationMethod() && doRedirectUsersFromLoginToSsoFlow()) {
+			this.logger.debug('Redirecting to OIDC login flow');
+			res.redirect(`${this.urlService.getInstanceBaseUrl()}/sso/oidc/login`);
+			return;
+		}
+
 		const { emailOrLdapLoginId, password, mfaCode, mfaRecoveryCode } = payload;
 
 		let user: User | undefined;

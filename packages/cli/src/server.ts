@@ -50,6 +50,9 @@ import '@/controllers/tags.controller';
 import '@/controllers/translation.controller';
 import '@/controllers/folder.controller';
 import '@/controllers/users.controller';
+
+// Import SSO config
+import '@/sso.cc/sso.config';
 import '@/controllers/user-settings.controller';
 import '@/controllers/workflow-statistics.controller';
 import '@/controllers/api-keys.controller';
