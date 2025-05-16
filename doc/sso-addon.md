@@ -104,6 +104,61 @@ Extend the user table with OIDC-specific fields:
 2. Add "Continue with SSO" button or auto-redirect based on settings
 3. Create a loading/spinner page for the callback flow
 
+## OpenShift Installation
+
+To deploy n8n with OIDC SSO on OpenShift, create these resources:
+
+```yaml
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: n8n-oidc-config
+data:
+  OIDC_ISSUER_URL: "https://your-idp.com"
+  OIDC_REDIRECT_URI: "https://<your-n8n-host>/sso/oidc/callback"
+  OIDC_SCOPES: "openid email profile"
+  OIDC_JIT_PROVISIONING: "true"
+  OIDC_REDIRECT_LOGIN_TO_SSO: "true"
+
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: n8n-oidc-secret
+type: Opaque
+stringData:
+  OIDC_CLIENT_ID: "your-client-id"
+  OIDC_CLIENT_SECRET: "your-client-secret"
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: n8n
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: n8n
+  template:
+    metadata:
+      labels:
+        app: n8n
+    spec:
+      containers:
+        - name: n8n
+          image: n8n/n8n:latest
+          envFrom:
+            - configMapRef:
+                name: n8n-oidc-config
+            - secretRef:
+                name: n8n-oidc-secret
+          # ... other env / ports / volume mounts ...
+```
+
+Replace `<your-n8n-host>`, client ID/secret, and adjust resources as needed to match your environment.
+
 ## Security Considerations
 
 - Always use Authorization Code flow with PKCE (even for confidential clients)
