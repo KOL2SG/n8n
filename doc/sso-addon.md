@@ -349,6 +349,50 @@ Alternatively, you can set the following environment variable to automatically r
 N8N_DB_MIGRATE_ON_STARTUP=true
 ```
 
+### SQLite Compatibility
+
+**Important**: If you're using SQLite as the database backend, you may encounter compatibility issues with the OIDC fields. The default migration may attempt to create the `oidcSubject` and `oidcIssuer` columns with a data type that SQLite doesn't support.
+
+If you encounter an error like:
+```
+Data type "Object" in "User.oidcSubject" is not supported by "sqlite" database.
+```
+
+You'll need to manually fix your SQLite database schema:
+
+1. Connect to your SQLite database file
+2. Execute the following SQL statements:
+
+```sql
+-- Create a new user table with the correct field types
+CREATE TABLE "user_new" AS SELECT * FROM "user";
+
+-- Drop the old table
+DROP TABLE "user";
+
+-- Recreate the user table with correct column types
+CREATE TABLE "user" (
+    -- Copy all columns but specify TEXT for OIDC fields
+    [id] TEXT PRIMARY KEY,
+    [email] TEXT,
+    -- Include all your other fields
+    [oidcSubject] TEXT,
+    [oidcIssuer] TEXT
+    -- Include remaining fields
+);
+
+-- Copy data back
+INSERT INTO "user" SELECT * FROM "user_new";
+
+-- Drop the temporary table
+DROP TABLE "user_new";
+
+-- Recreate any necessary indexes
+CREATE INDEX IF NOT EXISTS "IDX_user_oidcSubject" ON "user" ("oidcSubject");
+```
+
+Alternatively, consider using PostgreSQL or MySQL for production deployments with SSO features.
+
 > **Important**: Always backup your database before running migrations in production environments.
 
 ### 2. Install Required Dependencies

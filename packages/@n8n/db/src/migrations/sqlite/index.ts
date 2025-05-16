@@ -92,7 +92,6 @@ const sqliteMigrations: Migration[] = [
 	InitialMigration1588102412422,
 	WebhookModel1592445003908,
 	CreateIndexStoppedAt1594825041918,
-	AddWebhookId1611071044839,
 	MakeStoppedAtNullable1607431743769,
 	CreateTagEntity1617213344594,
 	UniqueWorkflowNames1620821879465,
