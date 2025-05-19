@@ -4,9 +4,8 @@ Track progress with [ ] (pending) and [x] (done).
 
 ## Checklist
 
-- [x] Add DB migration for `oidcSubject` and `oidcIssuer` columns & update User entity
+- [x] Add 'oidc' to `AuthProviderType` enum & extend `AuthIdentity` for OIDC
 - [x] Add feature flag `sso.oidcEnabled` guard in code (module, service, controller)
-- [x] Add `oidc` to `AuthProviderType` enum in `@n8n/db`
 - [x] Create `src/sso.cc/sso-helpers.cc.ts` with OIDC helper functions
 - [x] Create `src/sso.cc/oidc/oidc.service.cc.ts` implementing `OidcServiceCC`
 - [x] Create `src/sso.cc/oidc/oidc.controller.cc.ts` with `/login` and `/callback` routes
@@ -24,9 +23,8 @@ Track progress with [ ] (pending) and [x] (done).
 
 | Task                                | Status | Notes                                   |
 |-------------------------------------|:------:|-----------------------------------------|
-| Add DB migration & User entity update |   [x]   | Migration file + entity change          |
+| Add 'oidc' to enum & extend AuthIdentity |   [x]   | In `@n8n/db` code                       |
 | Add feature flag guard              |   [x]   | `sso.oidcEnabled` in code               |
-| Add `oidc` to enum                  |   [x]   | In `@n8n/db` code                       |
 | Create `sso-helpers.cc.ts`          |   [x]   | Community version of SSO helpers        |
 | Create `OidcServiceCC`              |   [x]   | Created with PKCE implementation        |
 | Create `OidcControllerCC`           |   [x]   | Express router for OIDC endpoints       |
@@ -42,6 +40,19 @@ Track progress with [ ] (pending) and [x] (done).
 
 ## Implementation Details
 
+### OIDC Identity Mapping
+
+Rather than adding columns to the `User` table, we reuse the existing `AuthIdentity` entity:
+
+1. Extend `AuthProviderType` with `'oidc'` in `@n8n/db/src/entities/types-db.ts`
+2. On successful OIDC login, call:
+   ```ts
+   const identity = AuthIdentity.create(user, subject, 'oidc');
+   await Container.get(AuthIdentityRepository).save(identity);
+   ```
+3. Lookup by `{ providerType: 'oidc', providerId: subject }`, joining `user.authIdentities`
+4. JIT provisioning creates both `User` and `AuthIdentity` when no existing identity is found
+
 ### OIDC Authentication Flow
 
 The implemented OIDC SSO solution follows this flow:
@@ -56,16 +67,11 @@ The implemented OIDC SSO solution follows this flow:
 
 ### Key Components Implemented
 
-#### 1. Database Updates
-- Added `oidcSubject` and `oidcIssuer` columns to the User entity
-- Updated the User entity to include these new fields
-- Added migration instructions to documentation (both manual and automatic options)
-
-#### 2. Feature Flag Protection
+#### 1. Feature Flag Protection
 - All OIDC functionality is guarded by the `sso.oidcEnabled` feature flag
 - Both login and callback endpoints check this flag before processing
 
-#### 3. OIDC Service (`OidcServiceCC`)
+#### 2. OIDC Service (`OidcServiceCC`)
 - Implements OpenID Connect client functionality with PKCE flow
 - Provides methods for:
   - Client initialization and discovery of OIDC provider metadata
@@ -73,13 +79,13 @@ The implemented OIDC SSO solution follows this flow:
   - Token exchange and validation using PKCE code verifier
   - User lookup or just-in-time provisioning based on OIDC claims
 
-#### 4. OIDC Controller (`OidcControllerCC`)
+#### 3. OIDC Controller (`OidcControllerCC`)
 - Provides Express routes for OIDC workflow:
   - `/login`: Initiates the OIDC authentication flow
   - `/callback`: Processes the OIDC provider callback
 - Handles error conditions and redirects to appropriate URLs
 
-#### 5. Just-in-Time (JIT) User Provisioning
+#### 4. Just-in-Time (JIT) User Provisioning
 - Automatically creates new user accounts based on OIDC claims
 - Maps OIDC attributes to n8n user properties
 - Updates existing users with OIDC identifiers if found by email

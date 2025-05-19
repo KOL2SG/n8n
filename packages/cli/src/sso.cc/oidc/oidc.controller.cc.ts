@@ -1,4 +1,4 @@
-import { Request, Response, Router } from 'express';
+import { Request, Response, Router, Application } from 'express';
 import { Logger } from 'n8n-core';
 import { Container } from '@n8n/di';
 import { AuthService } from '@/auth/auth.service';

@@ -48,6 +48,7 @@ export GLOBAL_AGENT_HTTPS_PROXY=http://proxy-server:port
 
 # If authentication is required
 export GLOBAL_AGENT_HTTP_PROXY=http://username:password@proxy-server:port
+export GLOBAL_AGENT_HTTPS_PROXY=http://username:password@proxy-server:port
 
 # To bypass the proxy for specific hosts
 export GLOBAL_AGENT_NO_PROXY=localhost,127.0.0.1,.example.com

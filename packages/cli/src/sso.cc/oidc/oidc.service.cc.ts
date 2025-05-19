@@ -1,4 +1,4 @@
-import { SettingsRepository, UserRepository } from '@n8n/db';
+import { SettingsRepository, UserRepository, AuthIdentity, AuthIdentityRepository } from '@n8n/db';
 import { Service } from '@n8n/di';
 import { Logger } from 'n8n-core';
 import { ApplicationError } from 'n8n-workflow';
@@ -21,6 +21,9 @@ import {
 	getOidcJitProvisioning,
 	getOidcRedirectLoginToSso,
 } from '../utils/config-helper';
+
+import type { User } from '@n8n/db';
+import type { DeepPartial } from '@n8n/typeorm';
 
 // Use CommonJS require to bypass TypeScript issues
 // eslint-disable-next-line @typescript-eslint/no-var-requires
@@ -49,6 +52,7 @@ export class OidcServiceCC {
 		private readonly userRepository: UserRepository,
 		private readonly settingsRepository: SettingsRepository,
 		private readonly authService: AuthService,
+		private readonly authIdentityRepository: AuthIdentityRepository,
 	) {}
 
 	async init(): Promise<void> {
@@ -179,62 +183,47 @@ export class OidcServiceCC {
 	}
 
 	async findOrCreateUserByTokenSet(tokenSet: any): Promise<{ user: any; isNew: boolean }> {
-		// Get the claims from the token set
 		const claims = tokenSet.claims();
-
 		const subject = claims.sub;
-		const issuer = claims.iss;
-
 		if (!subject) {
 			throw new BadRequestError('Invalid token - missing subject claim');
 		}
 
-		// First try to find an existing user by OIDC subject and issuer
-		let user = await this.userRepository.findOne({
-			where: {
-				oidcSubject: subject,
-				oidcIssuer: issuer,
-			},
-			relations: ['authIdentities', 'globalRole'],
+		// 1. Try existing OIDC identity
+		const identity = await this.authIdentityRepository.findOne({
+			where: { providerType: 'oidc', providerId: subject },
+			relations: ['user', 'user.authIdentities', 'user.globalRole'],
 		});
-
-		// If found, return the user
-		if (user) {
-			return { user, isNew: false };
+		if (identity) {
+			return { user: identity.user, isNew: false };
 		}
 
-		// If not found, try to find by email if present in claims
+		// 2. Fallback: find user by email claim
 		const email = claims.email as string;
 		if (email) {
-			user = await this.userRepository.findOne({
-				where: {
-					email,
-				},
+			const user = await this.userRepository.findOne({
+				where: { email },
 				relations: ['authIdentities', 'globalRole'],
 			});
-
 			if (user) {
-				// Update the user with OIDC identifiers
-				user.oidcSubject = subject;
-				user.oidcIssuer = issuer;
-				await this.userRepository.save(user);
+				const newIdentity = AuthIdentity.create(user, subject, 'oidc');
+				await this.authIdentityRepository.save(newIdentity);
 				return { user, isNew: false };
 			}
 		}
 
-		// If no user found and JIT provisioning is enabled, create a new user
+		// 3. JIT provisioning
 		if (isSsoJustInTimeProvisioningEnabled()) {
-			// Create a new user based on OIDC claims
-			const userData = {
+			const userData: any = {
 				email: email || `${subject}@oidc.user`,
 				firstName: (claims.name as string)?.split(' ')[0] || '',
 				lastName: (claims.name as string)?.split(' ').slice(1).join(' ') || '',
-				oidcSubject: subject,
-				oidcIssuer: issuer,
 			};
-
-			const newUser = await this.userRepository.save(this.userRepository.create(userData));
-
+			// Safely create a User entity and save to avoid ambiguous overloads
+			const newUserEntity: User = this.userRepository.create(userData as DeepPartial<User>);
+			const newUser: User = await this.userRepository.save(newUserEntity);
+			const newIdentity = AuthIdentity.create(newUser, subject, 'oidc');
+			await this.authIdentityRepository.save(newIdentity);
 			return { user: newUser, isNew: true };
 		}
 

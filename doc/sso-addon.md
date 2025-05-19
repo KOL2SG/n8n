@@ -22,7 +22,7 @@ The system is designed to have only one active authentication method at a time, 
 - Support unrestricted OIDC authentication (no license required)
 - Reuse existing session management, MFA, telemetry, and analytics flows
 - Allow global owners to fall back to email authentication when OIDC is active
-- Avoid modifying existing LDAP/SAML code paths
+- Avoid modifying existing LDAP/SAML code paths which have `ee` in the file or directory name. As this files are under commercial licenses
 
 ## High-Level Architecture
 
@@ -87,9 +87,13 @@ N8N_OIDC_REDIRECT_LOGIN_TO_SSO=true     # Default: false
 
 ### 4. Database Schema Updates
 
-Extend the user table with OIDC-specific fields:
-- `oidcSubject`: Store the OIDC subject identifier (nullable)
-- `oidcIssuer`: Store the issuer URL to handle multiple identity providers (nullable)
+- Remove existing user-table columns for OIDC and instead use the `AuthIdentity` entity:
+  - Add `'oidc'` to the `AuthProviderType` enum
+  - On login, create or lookup an AuthIdentity with:
+    - `providerType: 'oidc'`
+    - `providerId: <OIDC subject claim>`
+  - Link to User via the `authIdentities` relation
+  - JIT provisioning creates both `User` and `AuthIdentity` when no identity is found
 
 ## Implementation Approach
 
@@ -106,7 +110,7 @@ Unlike SAML, the OIDC SSO feature is designed to be available to all n8n install
 The implementation follows the NestJS modular approach with these components:
 
 1. **Feature Flag**: All OIDC code is guarded by the `sso.oidcEnabled` feature flag but not license checks
-2. **OidcService**: Core service handling token validation, user lookup, and provisioning 
+2. **OidcService**: Core service handling token validation, user lookup, and provisioning
 3. **OidcController**: Routes for the OIDC auth flow
 4. **Database Extensions**: Two new user fields (`oidcSubject` and `oidcIssuer`) for identity mapping
 
@@ -212,118 +216,8 @@ Replace `<your-n8n-host>`, client ID/secret, and adjust resources as needed to m
 - [x] TypeScript type declarations and type-safe utilities
 - [x] Code quality improvements and error handling
 - [x] TypeScript build compatibility fixes
-- [ ] Unit tests for OIDC components
-- [ ] Integration tests with a mock OIDC provider
-
-## Implementation Details
-
-### TypeScript Type System Integration
-
-1. **Type Declaration Files**
-
-   Created declaration files to properly extend the TypeScript type system:
-
-   ```typescript
-   // /packages/cli/src/types/config.d.ts
-   declare module '@n8n/config' {
-     interface ConfigOptionPathMap {
-       'sso.oidcEnabled': boolean;
-       'oidc.issuerUrl': string;
-       'oidc.clientId': string;
-       'oidc.clientSecret': string;
-       'oidc.redirectUri': string;
-       'oidc.scopes': string;
-       'oidc.jitProvisioning': boolean;
-       'oidc.redirectLoginToSso': boolean;
-     }
-   }
-
-   // /packages/cli/src/types/auth.d.ts
-   declare module '@/auth/auth.service' {
-     type AuthenticationMethod = 'email' | 'ldap' | 'saml' | 'oidc';
-   }
-
-   // Event payload types for auth events
-   declare module '@/events/event.service' {
-     interface EventPayloadLoginFailed {
-       authenticationMethod: 'email' | 'ldap' | 'saml' | 'oidc';
-       userEmail: string;
-       reason: string;
-     }
-     
-     interface EventPayloadLoggedIn {
-       user: any;
-       authenticationMethod: 'email' | 'ldap' | 'saml' | 'oidc';
-     }
-   }
-   ```
-
-2. **Type-Safe Config Helper Utilities**
-
-   Created helper utilities to safely access configuration settings, eliminating type errors:
-
-   ```typescript
-   // /packages/cli/src/sso.cc/utils/config-helper.ts
-   export function getOidcEnabled(): boolean {
-     return Boolean(config.getEnv('sso.oidcEnabled' as any));
-   }
-
-   export function getOidcIssuerUrl(): string {
-     return String(config.getEnv('oidc.issuerUrl' as any) || '');
-   }
-   // Other helper functions...
-   ```
-
-### Error Handling and Code Quality
-
-1. **Comprehensive Error Logging**
-
-   Implemented detailed error logging throughout the authentication flow:
-
-   ```typescript
-   try {
-     // Token validation code
-   } catch (error) {
-     this.logger.error('OIDC authentication failed', { 
-       error: error instanceof Error ? error.message : String(error),
-       issuer: tokenClaims.iss,
-       // Redacted sensitive information
-     });
-     throw new AuthError('Authentication failed');
-   }
-   ```
-
-2. **Authentication Method Fixes**
-
-   Fixed incorrect method usage for user authentication:
-   
-   ```typescript
-   // Before: Incorrect parameter passing
-   await this.authService.issueJWT(user, res); // Error: res is Response but string expected
-   
-   // After: Using the correct method
-   this.authService.issueCookie(res, user); // Correct: Takes Response as first parameter
-   ```
-   
-3. **Resource Cleanup**
-
-   Added proper cleanup of sensitive data:
-   
-   ```typescript
-   // Clear the PKCE verifier and nonce after use
-   this.pkceVerifier = null;
-   this.nonce = null;
-   ```
-   
-4. **Type-Safe Query Handling**
-
-   Improved request query handling for better type safety:
-   
-   ```typescript
-   // Properly type the query parameters
-   const queryParams = req.query as Record<string, string | string[]>;
-   const tokenSet = await this.oidcService.handleCallback(queryParams);
-   ```
+- [x] Unit tests for OIDC components
+- [x] Integration tests with a mock OIDC provider
 
 ## Installation and Configuration
 
