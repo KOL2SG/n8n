@@ -52,6 +52,7 @@ The system is designed to have only one active authentication method at a time, 
 
 A new service that will:
 - Use `openid-client` library to handle OIDC protocol flows
+- Lazy-load the ESM bundle at runtime via `await import('openid-client')` to support ESM-only exports.
 - Build authorization URLs for the `/sso/oidc/login` endpoint
 - Exchange authorization codes for tokens at the `/sso/oidc/callback` endpoint
 - Validate ID tokens and fetch additional user information if needed

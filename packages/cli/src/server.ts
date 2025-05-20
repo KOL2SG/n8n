@@ -52,8 +52,8 @@ import '@/controllers/folder.controller';
 import '@/controllers/users.controller';
 
 // Import SSO config
-import '@/sso.cc/sso.config';
-import { getOidcEnabled } from '@/sso.cc/utils/config-helper';
+import '@/sso.ce/sso.config';
+import { getOidcEnabled } from '@/sso.ce/utils/config-helper';
 import '@/controllers/user-settings.controller';
 import '@/controllers/workflow-statistics.controller';
 import '@/controllers/api-keys.controller';

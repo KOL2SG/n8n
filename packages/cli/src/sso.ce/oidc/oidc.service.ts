@@ -10,7 +10,7 @@ import { AuthService } from '@/auth/auth.service';
 import {
 	isOidcCurrentAuthenticationMethod,
 	isSsoJustInTimeProvisioningEnabled,
-} from '../sso-helpers.cc';
+} from '../sso-helpers';
 import {
 	getOidcEnabled,
 	getOidcIssuerUrl,
@@ -25,10 +25,6 @@ import {
 import type { User } from '@n8n/db';
 import type { DeepPartial } from '@n8n/typeorm';
 
-// Use CommonJS require to bypass TypeScript issues
-// eslint-disable-next-line @typescript-eslint/no-var-requires
-const { Issuer } = require('openid-client');
-
 interface OidcPreferences {
 	issuerUrl: string;
 	clientId: string;
@@ -42,6 +38,8 @@ interface OidcPreferences {
 @Service()
 export class OidcServiceCC {
 	// Use any type for the client to avoid TypeScript errors
+	private Issuer: any | null = null;
+	private generators: any | null = null;
 	private oidcClient: any = null;
 	private pkceVerifier: string | null = null;
 	private nonce: string | null = null;
@@ -82,8 +80,15 @@ export class OidcServiceCC {
 				issuerUrl: preferences.issuerUrl,
 			});
 
+			// Dynamically import the ESM openid-client bundle and extract named exports
+			const mod: any = await import('openid-client');
+			const openid = mod.default ?? mod;
+			const { Issuer, generators } = openid;
+			this.Issuer = Issuer;
+			this.generators = generators;
+
 			// First discover the OIDC provider's endpoints
-			const issuer = await Issuer.discover(preferences.issuerUrl);
+			const issuer = await this.Issuer.discover(preferences.issuerUrl);
 			this.logger.debug('OIDC issuer discovered successfully');
 
 			// Create a client instance
@@ -133,12 +138,12 @@ export class OidcServiceCC {
 		}
 
 		const preferences = this.getConfigPreferences();
-		// The generators functions are available on the Issuer class
-		this.pkceVerifier = Issuer.generators.codeVerifier();
-		this.nonce = Issuer.generators.nonce();
-		const state = Issuer.generators.state();
+		// Use dynamically loaded generators
+		this.pkceVerifier = this.generators!.codeVerifier();
+		this.nonce = this.generators!.nonce();
+		const state = this.generators!.state();
 
-		const codeChallenge = Issuer.generators.codeChallenge(this.pkceVerifier);
+		const codeChallenge = this.generators!.codeChallenge(this.pkceVerifier);
 
 		return this.oidcClient!.authorizationUrl({
 			scope: preferences.scopes.join(' '),

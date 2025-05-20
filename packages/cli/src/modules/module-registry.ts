@@ -1,6 +1,5 @@
 import type { LifecycleContext } from '@n8n/decorators';
-import { LifecycleMetadata } from '@n8n/decorators';
-// Using any for now since ModuleMetadata is missing
+import { LifecycleMetadata, ModuleMetadata } from '@n8n/decorators';
 import { Container, Service } from '@n8n/di';
 import type { ExecutionLifecycleHooks } from 'n8n-core';
 import type {
@@ -16,16 +15,13 @@ import type {
 @Service()
 export class ModuleRegistry {
 	constructor(
-		// Fix: Use any type to bypass the ModuleMetadata issue
-		private readonly moduleMetadata: any,
+		private readonly moduleMetadata: ModuleMetadata,
 		private readonly lifecycleMetadata: LifecycleMetadata,
 	) {}
 
 	async initializeModules() {
-		// Fix: Add type assertion to avoid 'unknown' type error
-		for (const ModuleClass of this.moduleMetadata.getModules() as Array<any>) {
-			// Using type assertion to avoid 'unknown' type error
-			await (Container.get(ModuleClass) as any).initialize?.();
+		for (const ModuleClass of this.moduleMetadata.getModules()) {
+			await Container.get(ModuleClass).initialize?.();
 		}
 	}
 

@@ -72,6 +72,7 @@ The implemented OIDC SSO solution follows this flow:
 - Both login and callback endpoints check this flag before processing
 
 #### 2. OIDC Service (`OidcServiceCC`)
+- Dynamically imports the ESM-only `openid-client` package at runtime via `await import` to avoid CJS interop issues
 - Implements OpenID Connect client functionality with PKCE flow
 - Provides methods for:
   - Client initialization and discovery of OIDC provider metadata

@@ -20,7 +20,7 @@ import { PostHogClient } from '@/posthog';
 import { AuthlessRequest } from '@/requests';
 import { UserService } from '@/services/user.service';
 import { UrlService } from '@/services/url.service';
-import { getOidcEnabled } from '@/sso.cc/utils/config-helper';
+import { getOidcEnabled } from '@/sso.ce/utils/config-helper';
 import {
 	getCurrentAuthenticationMethod,
 	isLdapCurrentAuthenticationMethod,
@@ -29,7 +29,7 @@ import {
 import {
 	isOidcCurrentAuthenticationMethod,
 	doRedirectUsersFromLoginToSsoFlow,
-} from '@/sso.cc/sso-helpers.cc';
+} from '@/sso.ce/sso-helpers';
 import config from '@/config';
 
 @RestController()

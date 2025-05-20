@@ -4,7 +4,7 @@ import { Container } from '@n8n/di';
 import { AuthService } from '@/auth/auth.service';
 import { UrlService } from '@/services/url.service';
 
-import { OidcServiceCC } from './oidc.service.cc';
+import { OidcServiceCC } from './oidc.service';
 import { getOidcEnabled } from '../utils/config-helper';
 
 /**
