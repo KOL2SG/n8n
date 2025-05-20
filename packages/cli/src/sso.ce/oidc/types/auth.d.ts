@@ -1,13 +1,13 @@
-// Fix type compatibility between AuthProviderType and AuthenticationMethod
+// Support OIDC as an authentication method
 import '@/auth/auth.service';
 import '@n8n/db';
 
-// Fix AuthenticationMethod in auth.service
+// Support OIDC as an authentication method
 declare module '@/auth/auth.service' {
 	type AuthenticationMethod = 'email' | 'ldap' | 'saml' | 'oidc';
 }
 
-// Fix AuthenticationMethod in events/event.service
+// Support OIDC in event payloads
 declare module '@/events/event.service' {
 	interface EventPayloadLoginFailed {
 		authenticationMethod: 'email' | 'ldap' | 'saml' | 'oidc';
@@ -21,7 +21,7 @@ declare module '@/events/event.service' {
 	}
 }
 
-// Ensure oidc is recognized in the auth provider type
+// Recognize OIDC in AuthIdentity mapping
 declare module '@n8n/db' {
 	interface AuthProviderTypeMap {
 		oidc: string;

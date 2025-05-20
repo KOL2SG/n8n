@@ -8,10 +8,6 @@ import { UrlService } from '@/services/url.service';
 import { AuthService } from '@/auth/auth.service';
 
 import {
-	isOidcCurrentAuthenticationMethod,
-	isSsoJustInTimeProvisioningEnabled,
-} from '../sso-helpers';
-import {
 	getOidcEnabled,
 	getOidcIssuerUrl,
 	getOidcClientId,
@@ -25,21 +21,13 @@ import {
 import type { User } from '@n8n/db';
 import type { DeepPartial } from '@n8n/typeorm';
 
-interface OidcPreferences {
-	issuerUrl: string;
-	clientId: string;
-	clientSecret: string;
-	redirectUri: string;
-	scopes: string[];
-	jitProvisioning: boolean;
-	redirectLoginToSso: boolean;
-}
-
 @Service()
 export class OidcServiceCC {
-	// Use any type for the client to avoid TypeScript errors
+	// Dynamically load openid-client at runtime to support its ESM module
 	private Issuer: any | null = null;
 	private generators: any | null = null;
+
+	// Use any type for the client to avoid TypeScript errors
 	private oidcClient: any = null;
 	private pkceVerifier: string | null = null;
 	private nonce: string | null = null;
@@ -80,26 +68,34 @@ export class OidcServiceCC {
 				issuerUrl: preferences.issuerUrl,
 			});
 
-			// Dynamically import the ESM openid-client bundle and extract named exports
-			const mod: any = await import('openid-client');
-			const openid = mod.default ?? mod;
-			const { Issuer, generators } = openid;
-			this.Issuer = Issuer;
-			this.generators = generators;
+			// Dynamically import openid-client
+			try {
+				// Import the ESM module and properly handle its structure
+				const { Issuer, generators } = await import('openid-client');
+				this.Issuer = Issuer;
+				this.generators = generators;
 
-			// First discover the OIDC provider's endpoints
-			const issuer = await this.Issuer.discover(preferences.issuerUrl);
-			this.logger.debug('OIDC issuer discovered successfully');
+				// Discover the OIDC provider's endpoints
+				const issuer = await Issuer.discover(preferences.issuerUrl);
+				this.logger.debug('OIDC issuer discovered successfully');
 
-			// Create a client instance
-			this.oidcClient = new issuer.Client({
-				client_id: preferences.clientId,
-				client_secret: preferences.clientSecret,
-				redirect_uris: [preferences.redirectUri],
-				response_types: ['code'],
-			});
+				// Create a client instance
+				this.oidcClient = new issuer.Client({
+					client_id: preferences.clientId,
+					client_secret: preferences.clientSecret,
+					redirect_uris: [preferences.redirectUri],
+					response_types: ['code'],
+				});
 
-			this.logger.debug('OIDC client initialized successfully');
+				this.logger.debug('OIDC client initialized successfully');
+			} catch (importError) {
+				this.logger.error(
+					`Failed to import openid-client: ${importError instanceof Error ? importError.message : String(importError)}`,
+				);
+				throw new Error(
+					`openid-client import failed: ${importError instanceof Error ? importError.message : String(importError)}`,
+				);
+			}
 		} catch (error) {
 			this.logger.error(
 				`OIDC client initialization failed: ${error instanceof Error ? error.message : String(error)}`,
@@ -121,7 +117,7 @@ export class OidcServiceCC {
 	}
 
 	isOidcLoginEnabled(): boolean {
-		return isOidcCurrentAuthenticationMethod();
+		return getOidcEnabled();
 	}
 
 	shouldRedirectLoginToSso(): boolean {
@@ -138,14 +134,15 @@ export class OidcServiceCC {
 		}
 
 		const preferences = this.getConfigPreferences();
-		// Use dynamically loaded generators
-		this.pkceVerifier = this.generators!.codeVerifier();
-		this.nonce = this.generators!.nonce();
-		const state = this.generators!.state();
+		if (!this.generators) {
+			throw new BadRequestError('OIDC client not initialized');
+		}
+		this.pkceVerifier = this.generators.codeVerifier();
+		this.nonce = this.generators.nonce();
+		const state = this.generators.state();
+		const codeChallenge = this.generators.codeChallenge(this.pkceVerifier);
 
-		const codeChallenge = this.generators!.codeChallenge(this.pkceVerifier);
-
-		return this.oidcClient!.authorizationUrl({
+		return this.oidcClient.authorizationUrl({
 			scope: preferences.scopes.join(' '),
 			code_challenge: codeChallenge,
 			code_challenge_method: 'S256',
@@ -165,7 +162,7 @@ export class OidcServiceCC {
 
 		try {
 			// Verify the callback parameters and exchange the code for tokens
-			const tokenSet = await this.oidcClient!.callback(
+			const tokenSet = await this.oidcClient.callback(
 				this.getConfigPreferences().redirectUri,
 				callbackParams,
 				{
@@ -218,7 +215,7 @@ export class OidcServiceCC {
 		}
 
 		// 3. JIT provisioning
-		if (isSsoJustInTimeProvisioningEnabled()) {
+		if (getOidcJitProvisioning()) {
 			const userData: any = {
 				email: email || `${subject}@oidc.user`,
 				firstName: (claims.name as string)?.split(' ')[0] || '',
@@ -234,4 +231,14 @@ export class OidcServiceCC {
 
 		throw new BadRequestError('User not found and JIT provisioning is disabled');
 	}
+}
+
+interface OidcPreferences {
+	issuerUrl: string;
+	clientId: string;
+	clientSecret: string;
+	redirectUri: string;
+	scopes: string[];
+	jitProvisioning: boolean;
+	redirectLoginToSso: boolean;
 }

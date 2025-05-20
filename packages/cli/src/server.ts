@@ -54,6 +54,7 @@ import '@/controllers/users.controller';
 // Import SSO config
 import '@/sso.ce/sso.config';
 import { getOidcEnabled } from '@/sso.ce/utils/config-helper';
+import { initializeOidcService } from '@/sso.ce/oidc/init';
 import '@/controllers/user-settings.controller';
 import '@/controllers/workflow-statistics.controller';
 import '@/controllers/api-keys.controller';
@@ -90,6 +91,9 @@ export class Server extends AbstractServer {
 
 		this.testWebhooksEnabled = true;
 		this.webhooksEnabled = !this.globalConfig.endpoints.disableProductionWebhooksOnMainProcess;
+
+		this.presetCredentialsLoaded = false;
+		this.endpointPresetCredentials = this.globalConfig.credentials.overwrite.endpoint;
 	}
 
 	async start() {
@@ -97,10 +101,6 @@ export class Server extends AbstractServer {
 			const { FrontendService } = await import('@/services/frontend.service');
 			this.frontendService = Container.get(FrontendService);
 		}
-
-		this.presetCredentialsLoaded = false;
-
-		this.endpointPresetCredentials = this.globalConfig.credentials.overwrite.endpoint;
 
 		await super.start();
 		this.logger.debug(`Server ID: ${this.instanceSettings.hostId}`);
