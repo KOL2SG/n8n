@@ -11,10 +11,23 @@ on:
         type: string
         default: 'master'
 
+<<<<<<< HEAD
+=======
+
+permissions:
+  contents: read
+
+>>>>>>> 8f961efeb (Merge branch 'master' of https://github.com/n8n-io/n8n)
 jobs:
   run_workflow_tests:
     name: Run Workflow Tests
     uses: ./.github/workflows/test-workflows-callable.yml
     with:
       git_ref: ${{ github.event_name == 'schedule' && 'master' || github.event.inputs.git_ref_to_test }}
+<<<<<<< HEAD
     secrets: inherit
+=======
+      send_webhook_report: false
+      pr_number: ''
+    secrets: inherit
+>>>>>>> 8f961efeb (Merge branch 'master' of https://github.com/n8n-io/n8n)

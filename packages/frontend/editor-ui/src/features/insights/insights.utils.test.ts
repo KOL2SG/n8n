@@ -73,6 +73,8 @@ describe('Insights Transformers', () => {
 			it('should calculate percentage deviation', () => {
 				expect(transformInsightsDeviation.total(110, 10)).toBe(10);
 				expect(transformInsightsDeviation.failed(55, 5)).toBe(10);
+				expect(transformInsightsDeviation.total(110, 10)).toBe(10);
+				expect(transformInsightsDeviation.failed(55, 5)).toBe(10);
 			});
 
 			it('should return 0 if value and deviation are 0', () => {

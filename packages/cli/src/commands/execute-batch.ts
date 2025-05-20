@@ -276,6 +276,15 @@ export class ExecuteBatch extends BaseCommand<z.infer<typeof flagsSchema>> {
 					this.logger.error('Skip list file is not a valid JSON. Exiting.');
 					return;
 				}
+				try {
+					const parsedSkipList = JSON.parse(contents) as ISkipList[];
+					parsedSkipList.forEach((item) => {
+						skipIds.push(item.workflowId);
+					});
+				} catch (error) {
+					this.logger.error('Skip list file is not a valid JSON. Exiting.');
+					return;
+				}
 			} else {
 				this.logger.error('Skip list file not found. Exiting.');
 				return;
