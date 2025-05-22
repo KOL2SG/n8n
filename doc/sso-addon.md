@@ -22,7 +22,7 @@ The system is designed to have only one active authentication method at a time, 
 - Support unrestricted OIDC authentication (no license required)
 - Reuse existing session management, MFA, telemetry, and analytics flows
 - Allow global owners to fall back to email authentication when OIDC is active
-- Avoid modifying existing LDAP/SAML code paths
+- Avoid modifying existing LDAP/SAML code paths which have `ee` in the file or directory name. As this files are under commercial licenses
 
 ## High-Level Architecture
 
@@ -52,6 +52,7 @@ The system is designed to have only one active authentication method at a time, 
 
 A new service that will:
 - Use `openid-client` library to handle OIDC protocol flows
+- Lazy-load the ESM bundle at runtime via `await import('openid-client')` to support ESM-only exports.
 - Build authorization URLs for the `/sso/oidc/login` endpoint
 - Exchange authorization codes for tokens at the `/sso/oidc/callback` endpoint
 - Validate ID tokens and fetch additional user information if needed
@@ -87,9 +88,13 @@ N8N_OIDC_REDIRECT_LOGIN_TO_SSO=true     # Default: false
 
 ### 4. Database Schema Updates
 
-Extend the user table with OIDC-specific fields:
-- `oidcSubject`: Store the OIDC subject identifier (nullable)
-- `oidcIssuer`: Store the issuer URL to handle multiple identity providers (nullable)
+- Remove existing user-table columns for OIDC and instead use the `AuthIdentity` entity:
+  - Add `'oidc'` to the `AuthProviderType` enum
+  - On login, create or lookup an AuthIdentity with:
+    - `providerType: 'oidc'`
+    - `providerId: <OIDC subject claim>`
+  - Link to User via the `authIdentities` relation
+  - JIT provisioning creates both `User` and `AuthIdentity` when no identity is found
 
 ## Implementation Approach
 
@@ -106,7 +111,7 @@ Unlike SAML, the OIDC SSO feature is designed to be available to all n8n install
 The implementation follows the NestJS modular approach with these components:
 
 1. **Feature Flag**: All OIDC code is guarded by the `sso.oidcEnabled` feature flag but not license checks
-2. **OidcService**: Core service handling token validation, user lookup, and provisioning 
+2. **OidcService**: Core service handling token validation, user lookup, and provisioning
 3. **OidcController**: Routes for the OIDC auth flow
 4. **Database Extensions**: Two new user fields (`oidcSubject` and `oidcIssuer`) for identity mapping
 
@@ -129,6 +134,107 @@ The implementation follows the NestJS modular approach with these components:
 1. Update the login view to show OIDC SSO option when configured
 2. Add "Continue with SSO" button or auto-redirect based on settings
 3. Create a loading/spinner page for the callback flow
+
+## Implementation Status
+
+- [x] Core OIDC service and controller components
+- [x] PKCE flow implementation for enhanced security
+- [x] Feature flag protection via `N8N_SSO_OIDC_ENABLED`
+- [x] JIT user provisioning based on OIDC claims
+- [x] Login flow redirection to OIDC when enabled
+- [x] Database schema updates for OIDC user mapping
+- [x] Configuration options for controlling OIDC behavior
+- [x] TypeScript type declarations and type-safe utilities
+
+## Implementation Details
+
+### OIDC Authentication Flow
+
+The implemented OIDC solution uses the Authorization Code flow with PKCE (Proof Key for Code Exchange) for enhanced security:
+
+1. When a user accesses the `/rest/sso/oidc/login` endpoint, the system:
+   - Generates a PKCE code verifier and code challenge
+   - Creates a state and nonce for security
+   - Redirects the user to the identity provider with these parameters
+
+2. After successful authentication at the identity provider, the callback process:
+   - Receives the authorization code at `/rest/sso/oidc/callback`
+   - Uses the saved PKCE code verifier to securely exchange the code for tokens
+   - Validates the token and extracts user information
+   - Creates or retrieves the user account
+   - Issues a session cookie and redirects to the dashboard
+
+### URL Handling
+
+The implementation properly handles both URL formats:
+- Controller registration: `/sso/oidc` (without `/rest/` prefix)
+- Actual URL access: `/rest/sso/oidc/login` (with `/rest/` prefix)
+
+This is important for the redirect URL configuration in your identity provider:
+- You must register: `http://your-n8n-host/rest/sso/oidc/callback`
+- The exact same URL must be configured in n8n's environment variables
+
+### User Mapping
+
+The implementation uses the `AuthIdentity` entity for mapping OIDC identities:
+
+```typescript
+// Find user by OIDC identity
+const identity = await authIdentityRepository.findOne({
+  where: { providerType: 'oidc', providerId: subject },
+  relations: ['user', 'user.authIdentities'],
+});
+
+// If no identity found, try by email
+if (!identity && email) {
+  const user = await userRepository.findOne({
+    where: { email },
+    relations: ['authIdentities'],
+  });
+
+  if (user) {
+    // Create identity link
+    const newIdentity = AuthIdentity.create(user, subject, 'oidc');
+    await authIdentityRepository.save(newIdentity);
+    return { user, isNew: false };
+  }
+}
+```
+
+### JIT User Provisioning
+
+When a user authenticates with OIDC for the first time, the system can automatically create an account:
+
+```typescript
+// Create new user if JIT provisioning is enabled
+if (getJitProvisioningEnabled()) {
+  const user = await createUserFromOidcToken(claims);
+  const identity = AuthIdentity.create(user, subject, 'oidc');
+  await authIdentityRepository.save(identity);
+  return { user, isNew: true };
+}
+```
+
+### Troubleshooting
+
+#### Common Issues and Solutions
+
+1. **Token Exchange Errors**:
+   - Ensure the redirect URL in your environment variables **exactly matches** what's registered with your identity provider
+   - Check that PKCE is enabled and supported by your provider
+   - Verify the client ID and client secret are correct
+
+2. **404 Errors on Callback**:
+   - The controller is registered at `/sso/oidc` but the URL includes `/rest/`
+   - Make sure to use `/rest/sso/oidc/callback` in your identity provider configuration
+
+3. **User Lookup Errors**:
+   - If you see errors about non-existent properties on the User entity:
+   - Make sure to use the correct relations when querying User entities:
+     ```typescript
+     relations: ['authIdentities'] // correct
+     relations: ['authIdentities', 'globalRole'] // incorrect (globalRole is a column, not a relation)
+     ```
 
 ## OpenShift Installation
 
@@ -200,80 +306,77 @@ Replace `<your-n8n-host>`, client ID/secret, and adjust resources as needed to m
 2. Integration tests for the OIDC authentication flow
 3. End-to-end tests with mock OIDC providers
 
-## Implementation Status
-
-- [x] Core OIDC service and controller components
-- [x] PKCE flow implementation for enhanced security
-- [x] Feature flag protection via `N8N_SSO_OIDC_ENABLED`
-- [x] JIT user provisioning based on OIDC claims
-- [x] Login flow redirection to OIDC when enabled
-- [x] Database schema updates for OIDC user mapping
-- [x] Configuration options for controlling OIDC behavior
-- [ ] Unit tests for OIDC components
-- [ ] Integration tests with a mock OIDC provider
-
-## Known Issues and Solutions
-
-### TypeScript Type Compatibility
-
-1. **Config Path Type Errors**
-
-   The current implementation uses `config.getEnv('sso.oidcEnabled')` which causes TypeScript errors because the path is not included in the `ConfigOptionPath` type. 
-
-   **Fix**: Add type assertions or update the ConfigOptionPath type definition:
-
-   ```typescript
-   // Using type assertion
-   const oidcEnabled = config.getEnv('sso.oidcEnabled' as any) as boolean;
-   
-   // Or define custom config option paths
-   declare module '@n8n/config' {
-     interface ConfigOptionPathMap {
-       'sso.oidcEnabled': boolean;
-       // Add other OIDC paths...
-     }
-   }
-   ```
-
-2. **Authentication Method Type Mismatch**
-
-   The `AuthProviderType` includes `'oidc'` but `AuthenticationMethod` may not, causing type compatibility issues.
-
-   **Fix**: Update type definitions to align these types:
-
-   ```typescript
-   // In types definition file
-   export type AuthenticationMethod = 'email' | 'ldap' | 'saml' | 'oidc';
-   ```
-
-### Error Handling Improvements
-
-1. **Token Validation**
-
-   Improve error handling during token validation and user lookup/creation:
-
-   ```typescript
-   try {
-     // Token validation code
-   } catch (error) {
-     this.logger.error('OIDC token validation failed', { 
-       error: error instanceof Error ? error.message : String(error),
-       issuer: tokenClaims.iss,
-       // Don't log sensitive information like tokens or user IDs
-     });
-     throw new AuthError('Authentication failed');
-   }
-   ```
-
-2. **Race Conditions in Configuration Loading**
-
-   The current implementation might have race conditions between config registration and usage.
-
-   **Fix**: Ensure configuration is loaded synchronously at startup before any authentication flow begins.
-
 ## Installation and Configuration
 
-### 1. Install Required Dependencies
+### 1. Database Migration
+
+The OIDC implementation requires database schema updates to add the following columns to the user table:
+- `oidcSubject`: Store the OIDC subject identifier (nullable string)
+- `oidcIssuer`: Store the issuer URL (nullable string)
+
+These changes require a manual migration step. Here's how to run it:
+
+```bash
+# Run the migration command inside your n8n installation
+n8n database:migrate
+
+# For Docker installations
+docker exec -it your-n8n-container n8n database:migrate
+```
+
+Alternatively, you can set the following environment variable to automatically run migrations at startup:
+
+```bash
+N8N_DB_MIGRATE_ON_STARTUP=true
+```
+
+### SQLite Compatibility
+
+**Important**: If you're using SQLite as the database backend, you may encounter compatibility issues with the OIDC fields. The default migration may attempt to create the `oidcSubject` and `oidcIssuer` columns with a data type that SQLite doesn't support.
+
+If you encounter an error like:
+```
+Data type "Object" in "User.oidcSubject" is not supported by "sqlite" database.
+```
+
+You'll need to manually fix your SQLite database schema:
+
+1. Connect to your SQLite database file
+2. Execute the following SQL statements:
+
+```sql
+-- Create a new user table with the correct field types
+CREATE TABLE "user_new" AS SELECT * FROM "user";
+
+-- Drop the old table
+DROP TABLE "user";
+
+-- Recreate the user table with correct column types
+CREATE TABLE "user" (
+    -- Copy all columns but specify TEXT for OIDC fields
+    [id] TEXT PRIMARY KEY,
+    [email] TEXT,
+    -- Include all your other fields
+    [oidcSubject] TEXT,
+    [oidcIssuer] TEXT
+    -- Include remaining fields
+);
+
+-- Copy data back
+INSERT INTO "user" SELECT * FROM "user_new";
+
+-- Drop the temporary table
+DROP TABLE "user_new";
+
+-- Recreate any necessary indexes
+CREATE INDEX IF NOT EXISTS "IDX_user_oidcSubject" ON "user" ("oidcSubject");
+```
+
+Alternatively, consider using PostgreSQL or MySQL for production deployments with SSO features.
+
+> **Important**: Always backup your database before running migrations in production environments.
+
+### 2. Install Required Dependencies
 
 The OIDC SSO implementation requires the `openid-client` package. Install it using:
 
