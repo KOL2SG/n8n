@@ -135,6 +135,107 @@ The implementation follows the NestJS modular approach with these components:
 2. Add "Continue with SSO" button or auto-redirect based on settings
 3. Create a loading/spinner page for the callback flow
 
+## Implementation Status
+
+- [x] Core OIDC service and controller components
+- [x] PKCE flow implementation for enhanced security
+- [x] Feature flag protection via `N8N_SSO_OIDC_ENABLED`
+- [x] JIT user provisioning based on OIDC claims
+- [x] Login flow redirection to OIDC when enabled
+- [x] Database schema updates for OIDC user mapping
+- [x] Configuration options for controlling OIDC behavior
+- [x] TypeScript type declarations and type-safe utilities
+
+## Implementation Details
+
+### OIDC Authentication Flow
+
+The implemented OIDC solution uses the Authorization Code flow with PKCE (Proof Key for Code Exchange) for enhanced security:
+
+1. When a user accesses the `/rest/sso/oidc/login` endpoint, the system:
+   - Generates a PKCE code verifier and code challenge
+   - Creates a state and nonce for security
+   - Redirects the user to the identity provider with these parameters
+
+2. After successful authentication at the identity provider, the callback process:
+   - Receives the authorization code at `/rest/sso/oidc/callback`
+   - Uses the saved PKCE code verifier to securely exchange the code for tokens
+   - Validates the token and extracts user information
+   - Creates or retrieves the user account
+   - Issues a session cookie and redirects to the dashboard
+
+### URL Handling
+
+The implementation properly handles both URL formats:
+- Controller registration: `/sso/oidc` (without `/rest/` prefix)
+- Actual URL access: `/rest/sso/oidc/login` (with `/rest/` prefix)
+
+This is important for the redirect URL configuration in your identity provider:
+- You must register: `http://your-n8n-host/rest/sso/oidc/callback`
+- The exact same URL must be configured in n8n's environment variables
+
+### User Mapping
+
+The implementation uses the `AuthIdentity` entity for mapping OIDC identities:
+
+```typescript
+// Find user by OIDC identity
+const identity = await authIdentityRepository.findOne({
+  where: { providerType: 'oidc', providerId: subject },
+  relations: ['user', 'user.authIdentities'],
+});
+
+// If no identity found, try by email
+if (!identity && email) {
+  const user = await userRepository.findOne({
+    where: { email },
+    relations: ['authIdentities'],
+  });
+
+  if (user) {
+    // Create identity link
+    const newIdentity = AuthIdentity.create(user, subject, 'oidc');
+    await authIdentityRepository.save(newIdentity);
+    return { user, isNew: false };
+  }
+}
+```
+
+### JIT User Provisioning
+
+When a user authenticates with OIDC for the first time, the system can automatically create an account:
+
+```typescript
+// Create new user if JIT provisioning is enabled
+if (getJitProvisioningEnabled()) {
+  const user = await createUserFromOidcToken(claims);
+  const identity = AuthIdentity.create(user, subject, 'oidc');
+  await authIdentityRepository.save(identity);
+  return { user, isNew: true };
+}
+```
+
+### Troubleshooting
+
+#### Common Issues and Solutions
+
+1. **Token Exchange Errors**:
+   - Ensure the redirect URL in your environment variables **exactly matches** what's registered with your identity provider
+   - Check that PKCE is enabled and supported by your provider
+   - Verify the client ID and client secret are correct
+
+2. **404 Errors on Callback**:
+   - The controller is registered at `/sso/oidc` but the URL includes `/rest/`
+   - Make sure to use `/rest/sso/oidc/callback` in your identity provider configuration
+
+3. **User Lookup Errors**:
+   - If you see errors about non-existent properties on the User entity:
+   - Make sure to use the correct relations when querying User entities:
+     ```typescript
+     relations: ['authIdentities'] // correct
+     relations: ['authIdentities', 'globalRole'] // incorrect (globalRole is a column, not a relation)
+     ```
+
 ## OpenShift Installation
 
 To deploy n8n with OIDC SSO on OpenShift, create these resources:
@@ -204,21 +305,6 @@ Replace `<your-n8n-host>`, client ID/secret, and adjust resources as needed to m
 1. Unit tests for the `OidcService` class
 2. Integration tests for the OIDC authentication flow
 3. End-to-end tests with mock OIDC providers
-
-## Implementation Status
-
-- [x] Core OIDC service and controller components
-- [x] PKCE flow implementation for enhanced security
-- [x] Feature flag protection via `N8N_SSO_OIDC_ENABLED`
-- [x] JIT user provisioning based on OIDC claims
-- [x] Login flow redirection to OIDC when enabled
-- [x] Database schema updates for OIDC user mapping
-- [x] Configuration options for controlling OIDC behavior
-- [x] TypeScript type declarations and type-safe utilities
-- [x] Code quality improvements and error handling
-- [x] TypeScript build compatibility fixes
-- [x] Unit tests for OIDC components
-- [x] Integration tests with a mock OIDC provider
 
 ## Installation and Configuration
 

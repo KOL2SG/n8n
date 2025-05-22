@@ -1,39 +1,37 @@
-import config from '@/config';
-
 /**
  * Utility functions to safely access config values with proper TypeScript type casting
  * This is a workaround for the TypeScript errors related to config paths
  */
 
 export function getOidcEnabled(): boolean {
-	return Boolean(config.getEnv('sso.oidcEnabled' as any));
+	return process.env.N8N_SSO_OIDC_ENABLED === 'true';
 }
 
 export function getOidcIssuerUrl(): string {
-	return String(config.getEnv('oidc.issuerUrl' as any) || '');
+	return process.env.N8N_OIDC_ISSUER_URL || '';
 }
 
 export function getOidcClientId(): string {
-	return String(config.getEnv('oidc.clientId' as any) || '');
+	return process.env.N8N_OIDC_CLIENT_ID || '';
 }
 
 export function getOidcClientSecret(): string {
-	return String(config.getEnv('oidc.clientSecret' as any) || '');
+	return process.env.N8N_OIDC_CLIENT_SECRET || '';
 }
 
 export function getOidcRedirectUri(): string {
-	return String(config.getEnv('oidc.redirectUri' as any) || '');
+	return process.env.N8N_OIDC_REDIRECT_URL || '';
 }
 
 export function getOidcScopes(): string[] {
-	const scopesString = String(config.getEnv('oidc.scopes' as any) || 'openid email profile');
-	return scopesString.split(' ');
+	const scopes = process.env.N8N_OIDC_SCOPES || 'openid email profile';
+	return scopes.split(/\s+/).filter(Boolean);
 }
 
 export function getOidcJitProvisioning(): boolean {
-	return config.getEnv('oidc.jitProvisioning' as any) !== false;
+	return process.env.N8N_OIDC_JIT_PROVISIONING === 'true';
 }
 
 export function getOidcRedirectLoginToSso(): boolean {
-	return config.getEnv('oidc.redirectLoginToSso' as any) === true;
+	return process.env.N8N_OIDC_REDIRECT_LOGIN_TO_SSO === 'true';
 }
