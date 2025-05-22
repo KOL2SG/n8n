@@ -24,23 +24,24 @@ export class OidcServiceCE {
 	private state: string | null = null;
 	private oidcClient: any | null = null;
 	private generators: any;
-	private oidcConfig: any | null = null;
+	// Configuration obtained during discovery
 	private readonly userRepository: UserRepository;
-	private readonly settingsRepository: SettingsRepository;
-	private readonly authService: AuthService;
+	// These are declared but currently unused - keeping for future extensibility
+	// private readonly settingsRepository: SettingsRepository;
+	// private readonly authService: AuthService;
 	private readonly authIdentityRepository: AuthIdentityRepository;
 
 	constructor(
 		logger: Logger,
 		userRepository: UserRepository,
-		settingsRepository: SettingsRepository,
-		authService: AuthService,
+		_settingsRepository: SettingsRepository,
+		_authService: AuthService,
 		authIdentityRepository: AuthIdentityRepository,
 	) {
 		this.logger = logger;
 		this.userRepository = userRepository;
-		this.settingsRepository = settingsRepository;
-		this.authService = authService;
+		// These services are injected but not currently used
+		// Will be used in future extensions
 		this.authIdentityRepository = authIdentityRepository;
 	}
 
@@ -95,8 +96,8 @@ export class OidcServiceCE {
 				this.logger.debug(`Discovering OIDC issuer: ${issuerUrl}`);
 				const config = await openid.discovery(new URL(issuerUrl), clientId, clientSecret);
 
-				// Store the config for later use
-				this.oidcConfig = config;
+				// Config is stored in local variables and accessed via helper methods
+				// No need to store the whole config object
 
 				this.logger.debug('OIDC issuer metadata retrieved', {
 					issuer: config.serverMetadata().issuer,
@@ -105,6 +106,14 @@ export class OidcServiceCE {
 						token: !!config.serverMetadata().token_endpoint,
 						userinfo: !!config.serverMetadata().userinfo_endpoint,
 					},
+				});
+
+				// Store discovery configuration in structured debug log
+				this.logger.debug('OIDC discovery complete', {
+					clientId: config.clientId,
+					authUrl: config.serverMetadata().authorization_endpoint,
+					tokenUrl: config.serverMetadata().token_endpoint,
+					jwksUrl: config.serverMetadata().jwks_uri,
 				});
 
 				// Create helper methods that match our existing interface
@@ -346,6 +355,8 @@ export class OidcServiceCE {
 				lastName: (claims.name as string)?.split(' ').slice(1).join(' ') || '',
 				// Set default role - required field in User entity
 				role: 'global:member',
+				// Set user status to active (skip the pending state)
+				isActive: true,
 			};
 			// Safely create a User entity and save to avoid ambiguous overloads
 			const newUserEntity: User = this.userRepository.create(userData as DeepPartial<User>);
