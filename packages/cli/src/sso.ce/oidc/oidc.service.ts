@@ -74,9 +74,43 @@ export class OidcServiceCE {
 		try {
 			// Load the module
 			const openid = require('openid-client');
+			// eslint-disable-next-line @typescript-eslint/no-var-requires
+			const globalAgent = require('global-agent');
+
 			this.logger.debug('openid-client exports', {
 				keys: Object.keys(openid).filter((k) => !k.startsWith('_')),
 			});
+
+			// Get the existing global-agent HTTP/HTTPS agents
+			const httpAgent = globalAgent.globals?.httpAgent;
+			const httpsAgent = globalAgent.globals?.httpsAgent;
+
+			// Configure proxy for openid-client requests
+			if (httpAgent || httpsAgent) {
+				this.logger.debug('Found global-agent proxy agents', {
+					hasHttpAgent: !!httpAgent,
+					hasHttpsAgent: !!httpsAgent,
+				});
+
+				// Configure the openid-client to use the global-agent HTTP agents
+				openid.custom.setHttpOptionsDefaults({
+					...(httpAgent ? { httpAgent } : {}),
+					...(httpsAgent ? { httpsAgent } : {}),
+					// For development environments, allow self-signed certificates
+					...(process.env.NODE_ENV === 'development' ? { rejectUnauthorized: false } : {}),
+				});
+
+				this.logger.debug('Applied global-agent HTTP agents to openid-client');
+			} else {
+				this.logger.debug('No global-agent HTTP agents found, using default configuration');
+				// Allow insecure requests in development
+				if (process.env.NODE_ENV === 'development') {
+					this.logger.debug('Setting TLS reject unauthorized to false for development');
+					openid.custom.setHttpOptionsDefaults({
+						rejectUnauthorized: false,
+					});
+				}
+			}
 
 			// Store PKCE generator functions
 			this.generators = {
