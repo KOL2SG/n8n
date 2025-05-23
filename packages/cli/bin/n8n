@@ -2,6 +2,7 @@
 
 require('global-agent/bootstrap');
 require('../dist/bootstrap-proxy');
+require('../dist/bootstrap-undici-proxy');
 
 const path = require('path');
 

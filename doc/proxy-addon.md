@@ -2,7 +2,7 @@
 
 ## Overview
 
-The n8n proxy extension is an implementation that uses the `global-agent` package to enable HTTP/HTTPS proxy support throughout the application, with particular emphasis on supporting HTTP CONNECT for HTTPS connections.
+The n8n proxy extension is an implementation that uses the `global-agent` package to enable HTTP/HTTPS proxy support throughout the application, with particular emphasis on supporting HTTP CONNECT for HTTPS connections. Additionally, it includes support for proxying requests made via `undici`, which is used by modern Node.js features like the native `fetch` API.
 
 ## Why It Was Implemented
 
@@ -14,9 +14,15 @@ The proxy extension was implemented to address the need for comprehensive proxy 
 
 3. **Corporate Network Compatibility**: Supporting users who need to run n8n in corporate environments where all outbound traffic must pass through a proxy server.
 
+4. **Support for Modern HTTP Clients**: Ensuring that both traditional Node.js HTTP/HTTPS modules and modern HTTP clients like `undici` (used by `fetch` API) respect proxy settings.
+
 ## Implementation Details
 
-The proxy extension is implemented in the `bootstrap-proxy.ts` file in the CLI package. It uses the `global-agent` package to intercept HTTP/HTTPS requests and route them through the configured proxy.
+The proxy extension consists of two main components:
+
+### 1. Global-Agent Bootstrap (Traditional HTTP/HTTPS)
+
+Implemented in the `bootstrap-proxy.ts` file in the CLI package. It uses the `global-agent` package to intercept HTTP/HTTPS requests and route them through the configured proxy.
 
 ```typescript
 // From bootstrap-proxy.ts
@@ -24,16 +30,52 @@ console.log('[bootstrap-proxy] interceptor loaded');
 import 'global-agent/bootstrap';
 
 console.error(
-	'[bootstrap-proxy] env GLOBAL_AGENT_HTTP_PROXY=',
+	'[bootstrap-proxy] env HTTP_PROXY=',
+	process.env.HTTP_PROXY,
+	'HTTPS_PROXY=',
+	process.env.HTTPS_PROXY,
+	'GLOBAL_AGENT.HTTP_PROXY=',
 	(global as any).GLOBAL_AGENT?.HTTP_PROXY,
-	'GLOBAL_AGENT_NO_PROXY=',
-	(global as any).GLOBAL_AGENT?.NO_PROXY,
 );
+```
+
+### 2. Undici Bootstrap (Modern Fetch API)
+
+Implemented in the `bootstrap-undici-proxy.ts` file to support proxying for the modern `fetch` API and libraries that use `undici` under the hood (like `openid-client`).
+
+```typescript
+// From bootstrap-undici-proxy.ts
+console.log('[bootstrap-undici-proxy] initializing...');
+
+import { ProxyAgent } from 'undici';
+import { setGlobalDispatcher } from 'undici';
+
+const proxyUrl = 
+    process.env.GLOBAL_AGENT_HTTP_PROXY || 
+    (global as any).GLOBAL_AGENT?.HTTP_PROXY || 
+    process.env.HTTP_PROXY ||
+    process.env.http_proxy ||
+    process.env.HTTPS_PROXY ||
+    process.env.https_proxy;
+
+if (proxyUrl) {
+    console.log(`[bootstrap-undici-proxy] configuring undici with proxy: ${proxyUrl}`);
+    
+    const proxyAgent = new ProxyAgent({
+        uri: proxyUrl,
+        ...(process.env.NODE_ENV === 'development' ? { 
+            requestTls: { rejectUnauthorized: false },
+            proxy: { rejectUnauthorized: false }
+        } : {})
+    });
+    
+    setGlobalDispatcher(proxyAgent);
+}
 ```
 
 The extension works by:
 
-1. Loading the `global-agent/bootstrap` module, which patches Node.js's HTTP and HTTPS modules to route requests through the configured proxy
+1. Loading both `global-agent/bootstrap` and the custom `bootstrap-undici-proxy` modules, which patch Node.js's HTTP modules and undici's dispatcher respectively
 2. Reading proxy configuration from environment variables
 3. Applying this configuration globally to all outgoing HTTP/HTTPS requests
 
@@ -54,7 +96,7 @@ export GLOBAL_AGENT_HTTPS_PROXY=http://username:password@proxy-server:port
 export GLOBAL_AGENT_NO_PROXY=localhost,127.0.0.1,.example.com
 
 # Then start n8n with the proxy extension enabled
-node -r ./packages/cli/build/bootstrap-proxy.js n8n
+node -r ./packages/cli/build/bootstrap-proxy.js -r ./packages/cli/build/bootstrap-undici-proxy.js n8n
 ```
 
 **Important Note**: Testing has shown that in the n8n implementation, only the `GLOBAL_AGENT_` prefixed variables are reliably recognized. Always use the `GLOBAL_AGENT_` prefixed variables for consistent behavior.
@@ -66,6 +108,8 @@ node -r ./packages/cli/build/bootstrap-proxy.js n8n
 2. **HTTPS Support**: The extension properly handles HTTPS connections through the proxy using the HTTP CONNECT protocol, which establishes a tunnel for secure communication.
 
 3. **Authentication Support**: Proxy servers requiring authentication are supported through the standard proxy URL format.
+
+4. **Comprehensive Coverage**: The dual-bootstrap approach ensures that both traditional Node.js HTTP modules and modern fetch-based libraries use the proxy correctly.
 
 ## Technical Details
 
@@ -99,7 +143,7 @@ services:
       - GLOBAL_AGENT_HTTP_PROXY=http://proxy-server:port
       - GLOBAL_AGENT_HTTPS_PROXY=http://proxy-server:port
       - GLOBAL_AGENT_NO_PROXY=localhost,127.0.0.1
-    command: node -r ./packages/cli/build/bootstrap-proxy.js n8n
+    command: node -r ./packages/cli/build/bootstrap-proxy.js -r ./packages/cli/build/bootstrap-undici-proxy.js n8n
 ```
 
 ## Troubleshooting
@@ -110,7 +154,7 @@ If you're experiencing issues with the proxy extension:
 
 2. **Check Proxy URL Format**: The proxy URL should be in the format `http://[username:password@]host:port`.
 
-3. **Debug Logs**: The bootstrap-proxy.ts file logs the proxy configuration at startup. Check these logs to verify that the proxy settings are being correctly loaded.
+3. **Debug Logs**: Both bootstrap files log the proxy configuration at startup. Check these logs to verify that the proxy settings are being correctly loaded.
 
 4. **Test Connection**: You can test if the proxy is working by making a simple HTTP request from within n8n to an external service.
 
@@ -120,7 +164,9 @@ If you're experiencing issues with the proxy extension:
 
 2. **WebSocket Support**: WebSocket connections may not be properly proxied in all cases, as the global-agent package primarily focuses on HTTP/HTTPS requests.
 
-3. **Custom HTTP Clients**: If a node or component in n8n uses a custom HTTP client that doesn't use Node.js's built-in HTTP/HTTPS modules, it may bypass the proxy configuration.
+3. **Custom HTTP Clients**: If a node or component in n8n uses a custom HTTP client that doesn't use Node.js's built-in HTTP/HTTPS modules or undici, it may bypass the proxy configuration. Specifically, the `got` HTTP client is not currently patched and may not respect proxy settings.
+
+4. **Undici Version Requirements**: The undici proxy support requires Node.js 16.5.0 or later, which supports the ProxyAgent feature in undici.
 
 ## Security Considerations
 
@@ -141,3 +187,5 @@ Potential future improvements to the proxy extension could include:
 2. Enhanced logging and diagnostics for proxy-related issues.
 
 3. Support for more advanced proxy features, such as proxy authentication methods beyond basic auth.
+
+4. Adding proxy support for the `got` HTTP client, which is used in some n8n nodes.
