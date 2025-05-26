@@ -364,6 +364,23 @@ export class OidcServiceCE {
 			relations: ['user', 'user.authIdentities'],
 		});
 		if (identity) {
+			// Ensure the user is activated when they log in via SSO
+			const user = identity.user;
+			if (!user.settings?.userActivated) {
+				this.logger.debug('Activating existing user logging in via OIDC', {
+					userId: user.id,
+					email: user.email,
+				});
+
+				// Initialize settings if not present
+				if (!user.settings) {
+					user.settings = {};
+				}
+
+				// Set user as activated
+				user.settings.userActivated = true;
+				await this.userRepository.save(user);
+			}
 			return { user: identity.user, isNew: false };
 		}
 
@@ -375,6 +392,23 @@ export class OidcServiceCE {
 				relations: ['authIdentities'],
 			});
 			if (user) {
+				// Ensure the user is activated when they log in via SSO
+				if (!user.settings?.userActivated) {
+					this.logger.debug('Activating existing user matched by email through OIDC', {
+						userId: user.id,
+						email: user.email,
+					});
+
+					// Initialize settings if not present
+					if (!user.settings) {
+						user.settings = {};
+					}
+
+					// Set user as activated
+					user.settings.userActivated = true;
+					await this.userRepository.save(user);
+				}
+
 				const newIdentity = AuthIdentity.create(user, subject, 'oidc');
 				await this.authIdentityRepository.save(newIdentity);
 				return { user, isNew: false };
@@ -383,20 +417,55 @@ export class OidcServiceCE {
 
 		// 3. JIT provisioning
 		if (getOidcJitProvisioning()) {
+			this.logger.debug('Creating new user via OIDC JIT provisioning', {
+				email,
+				subject,
+				hasName: !!claims.name,
+			});
+
 			const userData: any = {
 				email: email || `${subject}@oidc.user`,
 				firstName: (claims.name as string)?.split(' ')[0] || '',
 				lastName: (claims.name as string)?.split(' ').slice(1).join(' ') || '',
 				// Set default role - required field in User entity
 				role: 'global:member',
-				// Set user status to active (skip the pending state)
-				isActive: true,
+				// Set user status to active via settings
+				settings: {
+					userActivated: true,
+				},
 			};
+
 			// Safely create a User entity and save to avoid ambiguous overloads
 			const newUserEntity: User = this.userRepository.create(userData as DeepPartial<User>);
 			const newUser: User = await this.userRepository.save(newUserEntity);
+
+			// Double-check that the user is actually activated after saving
+			if (!newUser.settings?.userActivated) {
+				this.logger.warn(
+					'User created via JIT was not activated automatically, forcing activation',
+					{
+						userId: newUser.id,
+						email: newUser.email,
+					},
+				);
+
+				// Force activation if somehow the user was still created as inactive
+				if (!newUser.settings) {
+					newUser.settings = {};
+				}
+				newUser.settings.userActivated = true;
+				await this.userRepository.save(newUser);
+			}
+
 			const newIdentity = AuthIdentity.create(newUser, subject, 'oidc');
 			await this.authIdentityRepository.save(newIdentity);
+
+			this.logger.debug('Successfully created and activated new user via OIDC', {
+				userId: newUser.id,
+				email: newUser.email,
+				isActivated: newUser.settings?.userActivated,
+			});
+
 			return { user: newUser, isNew: true };
 		}
 
