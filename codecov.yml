@@ -8,6 +8,7 @@ coverage:
     project:
       default:
         threshold: 0.5
+        threshold: 0.5
 
 github_checks:
   annotations: false
