@@ -423,21 +423,17 @@ export class OidcServiceCE {
 				hasName: !!claims.name,
 			});
 
-			const userData: any = {
+			// Prepare user data for creation
+			const userData: DeepPartial<User> = {
 				email: email || `${subject}@oidc.user`,
 				firstName: (claims.name as string)?.split(' ')[0] || '',
 				lastName: (claims.name as string)?.split(' ').slice(1).join(' ') || '',
-				// Set default role - required field in User entity
 				role: 'global:member',
-				// Set user status to active via settings
-				settings: {
-					userActivated: true,
-				},
+				settings: { userActivated: true },
 			};
 
-			// Safely create a User entity and save to avoid ambiguous overloads
-			const newUserEntity: User = this.userRepository.create(userData as DeepPartial<User>);
-			const newUser: User = await this.userRepository.save(newUserEntity);
+			// Use helper to also create the user's personal project + relation
+			const { user: newUser } = await this.userRepository.createUserWithProject(userData);
 
 			// Double-check that the user is actually activated after saving
 			if (!newUser.settings?.userActivated) {
