@@ -237,6 +237,97 @@ export class OidcServiceCE {
 			throw error;
 		}
 	}
+
+	/**
+	 * Extract first and last name from OIDC claims
+	 */
+	private extractNameFromClaims(claims: any): { firstName: string; lastName: string } {
+		let firstName = '';
+		let lastName = '';
+
+		// Debug log to see exact structure of name fields
+		this.logger.debug('OIDC name claims received', {
+			name: claims.name,
+			givenName: claims.given_name,
+			familyName: claims.family_name,
+		});
+
+		// For Microsoft Entra ID (Azure AD), the name format is often "LastName, FirstName"
+		// Check if the name contains a comma which indicates this format
+		if (claims.name && claims.name.includes(',')) {
+			const [lastNamePart, firstNamePart] = claims.name
+				.split(',')
+				.map((part: string) => part.trim());
+			firstName = firstNamePart || '';
+			lastName = lastNamePart || '';
+			this.logger.debug('Extracted name using comma format', { firstName, lastName });
+		}
+		// Then try to use given_name and family_name if available (standard claims)
+		else if (claims.given_name || claims.family_name) {
+			firstName = claims.given_name || '';
+			lastName = claims.family_name || '';
+			this.logger.debug('Extracted name using standard claims', { firstName, lastName });
+		}
+		// Fall back to splitting the name field if available
+		else if (claims.name) {
+			const nameParts = (claims.name as string).split(' ');
+			firstName = nameParts[0] || '';
+			lastName = nameParts.slice(1).join(' ') || '';
+			this.logger.debug('Extracted name by splitting on spaces', { firstName, lastName });
+		}
+
+		return { firstName, lastName };
+	}
+
+	/**
+	 * Update an existing user with information from OIDC claims
+	 */
+	private async updateUserFromClaims(user: User, claims: any): Promise<User> {
+		let isChanged = false;
+		const { firstName, lastName } = this.extractNameFromClaims(claims);
+
+		// Only update if SSO provides these values and they differ from what we have
+		if (firstName && firstName !== user.firstName) {
+			user.firstName = firstName;
+			isChanged = true;
+		}
+
+		if (lastName && lastName !== user.lastName) {
+			user.lastName = lastName;
+			isChanged = true;
+		}
+
+		// Ensure user is not pending by setting a random password if null
+		// This addresses the User.isPending computed property that checks for null password
+		if (user.password === null) {
+			// Generate a random string that won't be used (SSO users authenticate via SSO)
+			user.password = this.generateRandomPassword();
+			isChanged = true;
+			this.logger.debug('Setting random password for SSO user to prevent pending status', {
+				userId: user.id,
+			});
+		}
+
+		if (isChanged) {
+			await this.userRepository.save(user);
+			this.logger.debug('Updated user information from OIDC claims', {
+				userId: user.id,
+				email: user.email,
+			});
+		}
+
+		return user;
+	}
+
+	/**
+	 * Generate a random password for SSO users to prevent them from showing as "pending"
+	 */
+	private generateRandomPassword(): string {
+		// This password will never be used, but prevents the user from being marked as "pending"
+		// It's a random string that is hashed before storage
+		return Buffer.from(crypto.randomBytes(32)).toString('hex');
+	}
+
 	getConfigPreferences(): OidcPreferences {
 		return {
 			issuerUrl: getOidcIssuerUrl(),
