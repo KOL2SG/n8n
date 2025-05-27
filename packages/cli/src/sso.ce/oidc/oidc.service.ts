@@ -286,15 +286,32 @@ export class OidcServiceCE {
 		let isChanged = false;
 		const { firstName, lastName } = this.extractNameFromClaims(claims);
 
-		// Only update if SSO provides these values and they differ from what we have
-		if (firstName && firstName !== user.firstName) {
+		// Always update name from OIDC on each login if values are provided
+		// This ensures the name in n8n stays in sync with the identity provider
+		if (firstName) {
+			const nameChanged = firstName !== user.firstName;
 			user.firstName = firstName;
-			isChanged = true;
+			if (nameChanged) {
+				isChanged = true;
+				this.logger.debug('Updated firstName from OIDC claims', {
+					userId: user.id,
+					old: user.firstName,
+					new: firstName,
+				});
+			}
 		}
 
-		if (lastName && lastName !== user.lastName) {
+		if (lastName) {
+			const nameChanged = lastName !== user.lastName;
 			user.lastName = lastName;
-			isChanged = true;
+			if (nameChanged) {
+				isChanged = true;
+				this.logger.debug('Updated lastName from OIDC claims', {
+					userId: user.id,
+					old: user.lastName,
+					new: lastName,
+				});
+			}
 		}
 
 		// Ensure user is not pending by setting a random password if null

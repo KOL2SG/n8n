@@ -80,6 +80,11 @@ const isExternalAuthEnabled = computed((): boolean => {
 });
 
 const isPersonalSecurityEnabled = computed((): boolean => {
+	// IMPORTANT: OIDC users should NEVER see security settings, regardless of other permissions
+	if (hasOidcIdentity.value) {
+		return false;
+	}
+	// For non-OIDC users, apply normal rules
 	return usersStore.isInstanceOwner || !isExternalAuthEnabled.value;
 });
 
