@@ -79,10 +79,19 @@ const isExternalAuthEnabled = computed((): boolean => {
 	return isLdapEnabled || isSamlEnabled || isOidcEnabled;
 });
 const hasOidcIdentity = computed((): boolean => {
-	// Check if user has OIDC identity by looking at authIdentities
-	return (
-		currentUser.value?.authIdentities?.some((identity) => identity.providerType === 'oidc') ?? false
-	);
+	// Check if user has OIDC identity
+	if (!currentUser.value) {
+		return false;
+	}
+
+	// Primary check: Look for authIdentities with providerType === 'oidc'
+	if (currentUser.value.authIdentities?.some((identity) => identity.providerType === 'oidc')) {
+		return true;
+	}
+
+	// Secondary check: Check signInType property
+	// Some API responses might not include authIdentities but will have signInType
+	return currentUser.value.signInType === 'oidc';
 });
 const isPersonalSecurityEnabled = computed((): boolean => {
 	// Disable password change for OIDC users
