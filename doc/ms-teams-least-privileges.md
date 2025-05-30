@@ -15,7 +15,7 @@ openid offline_access User.ReadWrite.All Group.ReadWrite.All Chat.ReadWrite
 ### New Least Privilege OAuth2 Scopes
 
 ```
-openid offline_access User.ReadBasic.All GroupMember.Read.All Chat.Read
+openid offline_access User.ReadBasic.All GroupMember.Read.All Chat.ReadWrite
 ```
 
 ### Permissions for Microsoft Teams Trigger (unchanged)
@@ -32,7 +32,7 @@ Trigger functionality still requires these permissions:
 | --- | --- | --- |
 | `User.ReadWrite.All` | `User.ReadBasic.All` | The Teams node primarily needs basic user properties (ObjectId, UserPrincipalName, Display Name, etc.). Write access is not required for core functionality. |
 | `Group.ReadWrite.All` | `GroupMember.Read.All` | The `Group.Read.All` permission is blacklisted as it includes access to all M365 related services. `GroupMember.Read.All` provides access to Teams, their members and basic properties without excessive permissions. |
-| `Chat.ReadWrite` | `Chat.Read` | Most Teams operations only need to read chat messages; write operations can be handled separately when explicitly required. |
+| `Chat.ReadWrite` | `Chat.ReadWrite` | Chat write operations are required for creating and updating messages. |
 
 ## Microsoft Graph API Permission Details
 
@@ -55,13 +55,13 @@ Allows the app to:
 
 Without allowing access to shared files or other sensitive Teams content.
 
-### Chat.Read
+### Chat.ReadWrite
 
 Allows the app to:
 - Read chat messages
 - Access chat thread information
-
-Without allowing message creation or modification.
+- Create and update messages
+- Send messages to chats and channels
 
 ## Feature Impact
 
