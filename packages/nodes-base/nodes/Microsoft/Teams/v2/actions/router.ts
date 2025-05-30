@@ -41,6 +41,17 @@ export async function router(this: IExecuteFunctions): Promise<INodeExecutionDat
 		return [items];
 	}
 
+	// Check if Channel resource is selected with write operations (Bosch Security Requirement)
+	if (
+		microsoftTeamsTypeData.resource === 'channel' &&
+		['create', 'update', 'delete', 'deleteChannel'].includes(microsoftTeamsTypeData.operation)
+	) {
+		throw new NodeOperationError(
+			this.getNode(),
+			'Write operations for the Channel resource have been disabled due to Bosch security requirements. Only read operations (Get, Get All) are allowed.',
+		);
+	}
+
 	for (let i = 0; i < items.length; i++) {
 		try {
 			switch (microsoftTeamsTypeData.resource) {

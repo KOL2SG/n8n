@@ -35,8 +35,9 @@ export const versionDescription: INodeTypeDescription = {
 			noDataExpression: true,
 			options: [
 				{
-					name: 'Channel',
+					name: 'Channel (Read-Only)',
 					value: 'channel',
+					description: 'Due to Bosch security requirements, only read operations are allowed',
 				},
 				{
 					name: 'Channel Message',

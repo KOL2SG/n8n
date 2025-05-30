@@ -26,6 +26,24 @@ Trigger functionality still requires these permissions:
 - `Team.ReadBasic.All`
 - `Subscription.ReadWrite.All`
 
+## Limited Resources
+
+### Channel Resource (Read-Only)
+
+To comply with Bosch security requirements, the Channel resource is limited to read-only operations. 
+
+**Allowed operations:**
+- Get Channel - Retrieve a specific channel by ID
+- Get All Channels - List all channels in a team
+
+**Blocked operations:**
+- Create Channel
+- Update Channel
+- Delete Channel
+
+**Justification:**
+Read operations have minimal security impact and are necessary for core functionality, while write operations could potentially alter team structures and thus are restricted.
+
 ## Justification for Permission Changes
 
 | Previous Permission | New Permission | Justification |
