@@ -57,7 +57,7 @@ export class AuthController {
 		const oidcEnabled = getOidcEnabled();
 		if (oidcEnabled && isOidcCurrentAuthenticationMethod() && doRedirectUsersFromLoginToSsoFlow()) {
 			this.logger.debug('Redirecting to OIDC login flow');
-			res.redirect(`${this.urlService.getInstanceBaseUrl()}/sso/oidc/login`);
+			res.redirect(`${this.urlService.getInstanceBaseUrl()}/rest/sso/oidc/login`);
 			return;
 		}
 

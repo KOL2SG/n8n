@@ -42,6 +42,9 @@ export const useSettingsStore = defineStore(STORES.SETTINGS, () => {
 			enabled: false,
 		},
 	});
+	const ldap = ref({ loginLabel: '', loginEnabled: false });
+	const saml = ref({ loginLabel: '', loginEnabled: false });
+	const oidc = ref({ loginLabel: '', loginEnabled: false });
 	const mfa = ref({ enabled: false });
 	const folders = ref({ enabled: false });
 
@@ -85,6 +88,16 @@ export const useSettingsStore = defineStore(STORES.SETTINGS, () => {
 	const publicApiLatestVersion = computed(() => api.value.latestVersion);
 
 	const publicApiPath = computed(() => api.value.path);
+
+	const isLdapLoginEnabled = computed(() => ldap.value.loginEnabled);
+
+	const ldapLoginLabel = computed(() => ldap.value.loginLabel);
+
+	const isSamlLoginEnabled = computed(() => saml.value.loginEnabled);
+
+	const isOidcLoginEnabled = computed(() => oidc.value.loginEnabled);
+
+	const oidcLoginLabel = computed(() => oidc.value.loginLabel);
 
 	const isAiAssistantEnabled = computed(() => settings.value.aiAssistant?.enabled);
 
@@ -178,6 +191,14 @@ export const useSettingsStore = defineStore(STORES.SETTINGS, () => {
 		() => settings.value.workflowCallerPolicyDefaultOption,
 	);
 
+	const isDefaultAuthenticationSaml = computed(
+		() => userManagement.value.authenticationMethod === UserManagementAuthenticationMethod.Saml,
+	);
+
+	const isDefaultAuthenticationOidc = computed(
+		() => userManagement.value.authenticationMethod === UserManagementAuthenticationMethod.Oidc,
+	);
+
 	const permanentlyDismissedBanners = computed(() => settings.value.banners?.dismissed ?? []);
 
 	const isCommunityPlan = computed(() => planName.value.toLowerCase() === 'community');
@@ -192,6 +213,19 @@ export const useSettingsStore = defineStore(STORES.SETTINGS, () => {
 				!!settings.value.userManagement.showSetupOnFirstLoad;
 		}
 		api.value = settings.value.publicApi;
+		if (settings.value.sso?.ldap) {
+			ldap.value.loginEnabled = settings.value.sso.ldap.loginEnabled;
+			ldap.value.loginLabel = settings.value.sso.ldap.loginLabel;
+		}
+		if (settings.value.sso?.saml) {
+			saml.value.loginEnabled = settings.value.sso.saml.loginEnabled;
+			saml.value.loginLabel = settings.value.sso.saml.loginLabel;
+		}
+		if (settings.value.sso?.oidc) {
+			oidc.value.loginEnabled = settings.value.sso.oidc.loginEnabled;
+			oidc.value.loginLabel = settings.value.sso.oidc.loginLabel;
+		}
+
 		mfa.value.enabled = settings.value.mfa?.enabled;
 		folders.value.enabled = settings.value.folders?.enabled;
 
@@ -337,6 +371,9 @@ export const useSettingsStore = defineStore(STORES.SETTINGS, () => {
 		userManagement,
 		templatesEndpointHealthy,
 		api,
+		ldap,
+		saml,
+		oidc,
 		mfa,
 		isDocker,
 		isDevRelease,
@@ -355,6 +392,11 @@ export const useSettingsStore = defineStore(STORES.SETTINGS, () => {
 		isPreviewMode,
 		publicApiLatestVersion,
 		publicApiPath,
+		isLdapLoginEnabled,
+		ldapLoginLabel,
+		isSamlLoginEnabled,
+		isOidcLoginEnabled,
+		oidcLoginLabel,
 		showSetupPage,
 		deploymentType,
 		isCloudDeployment,
@@ -378,6 +420,8 @@ export const useSettingsStore = defineStore(STORES.SETTINGS, () => {
 		isQueueModeEnabled,
 		isMultiMain,
 		isWorkerViewAvailable,
+		isDefaultAuthenticationSaml,
+		isDefaultAuthenticationOidc,
 		workflowCallerPolicyDefaultOption,
 		permanentlyDismissedBanners,
 		saveDataErrorExecution,

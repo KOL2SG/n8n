@@ -91,12 +91,66 @@ export const useSSOStore = defineStore('sso', () => {
 			void toggleLoginEnabled(value);
 		},
 	});
-
-	const isEnterpriseSamlEnabled = ref(false);
-
-	const isDefaultAuthenticationSaml = computed(
-		() => authenticationMethod.value === UserManagementAuthenticationMethod.Saml,
+	const isEnterpriseSamlEnabled = computed(
+		() => settingsStore.isEnterpriseFeatureEnabled[EnterpriseEditionFeature.Saml],
 	);
+	const isDefaultAuthenticationSaml = computed(() => settingsStore.isDefaultAuthenticationSaml);
+
+	const isOidcLoginEnabled = computed({
+		get: () => settingsStore.isOidcLoginEnabled,
+		set: (value: boolean) => {
+			settingsStore.setSettings({
+				...settingsStore.settings,
+				sso: {
+					...settingsStore.settings.sso,
+					oidc: {
+						...settingsStore.settings.sso.oidc,
+						loginEnabled: value,
+					},
+				},
+			});
+		},
+	});
+	const isDefaultAuthenticationOidc = computed(() => settingsStore.isDefaultAuthenticationOidc);
+
+	const showSsoLoginButton = computed(
+		() =>
+			// SAML: Requires both enterprise license AND SAML config
+			(isSamlLoginEnabled.value &&
+				isEnterpriseSamlEnabled.value &&
+				isDefaultAuthenticationSaml.value) ||
+			// OIDC: Only needs to be enabled (no enterprise license required)
+			(isOidcLoginEnabled.value && isDefaultAuthenticationOidc.value),
+	);
+
+	// Determine which SSO type is active
+	const ssoType = computed(() => {
+		if (isOidcLoginEnabled.value && isDefaultAuthenticationOidc.value) {
+			return 'oidc';
+		}
+		if (
+			isSamlLoginEnabled.value &&
+			isEnterpriseSamlEnabled.value &&
+			isDefaultAuthenticationSaml.value
+		) {
+			return 'saml';
+		}
+		return null;
+	});
+
+	const getSSORedirectUrl = async () => {
+		if (ssoType.value === 'oidc') {
+			// For OIDC, redirect directly to the login endpoint
+			const baseUrl = settingsStore.settings.urlBaseEditor || window.location.origin;
+			return `${baseUrl}/rest/sso/oidc/login`;
+		} else {
+			// Existing SAML logic
+			return await ssoApi.initSSO(
+				rootStore.restApiContext,
+				typeof route.query?.redirect === 'string' ? route.query.redirect : '',
+			);
+		}
+	};
 
 	const toggleLoginEnabled = async (enabled: boolean) =>
 		await ssoApi.toggleSamlConfig(rootStore.restApiContext, { loginEnabled: enabled });
@@ -216,6 +270,12 @@ export const useSSOStore = defineStore('sso', () => {
 		isSamlLoginEnabled,
 		isEnterpriseSamlEnabled,
 		isDefaultAuthenticationSaml,
+		isOidcLoginEnabled,
+		isDefaultAuthenticationOidc,
+		showSsoLoginButton,
+		samlConfig,
+		ssoType,
+		getSSORedirectUrl,
 		getSamlMetadata,
 		getSamlConfig,
 		saveSamlConfig,

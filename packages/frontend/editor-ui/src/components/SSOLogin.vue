@@ -2,6 +2,7 @@
 import { useSSOStore } from '@/stores/sso.store';
 import { useI18n } from '@n8n/i18n';
 import { useToast } from '@/composables/useToast';
+import { computed } from 'vue';
 import { useRoute } from 'vue-router';
 
 const i18n = useI18n();
@@ -21,6 +22,17 @@ const onSSOLogin = async () => {
 		toast.showError(error, 'Error', error.message);
 	}
 };
+
+// Compute button label based on SSO type
+const ssoButtonLabel = computed(() => {
+	const ssoType = ssoStore.ssoType;
+	if (ssoType === 'oidc') {
+		return i18n.baseText('sso.oidc.login.button');
+	} else if (ssoType === 'saml') {
+		return i18n.baseText('sso.saml.login.button');
+	}
+	return i18n.baseText('sso.login.button'); // fallback
+});
 </script>
 
 <template>
@@ -28,13 +40,7 @@ const onSSOLogin = async () => {
 		<div :class="$style.divider">
 			<span>{{ i18n.baseText('sso.login.divider') }}</span>
 		</div>
-		<N8nButton
-			size="large"
-			type="primary"
-			outline
-			:label="i18n.baseText('sso.login.button')"
-			@click="onSSOLogin"
-		/>
+		<n8n-button size="large" type="primary" outline :label="ssoButtonLabel" @click="onSSOLogin" />
 	</div>
 </template>
 
