@@ -7,7 +7,17 @@ import config from '@/config';
  * Helper functions for SSO (Community edition)
  */
 
+// OIDC-specific helper functions
+export function isOidcEnabled(): boolean {
+	return process.env.N8N_SSO_OIDC_ENABLED === 'true';
+}
+
 export function getCurrentAuthenticationMethod(): AuthProviderType {
+	// If OIDC is enabled, return 'oidc' as the current authentication method
+	if (isOidcEnabled()) {
+		return 'oidc';
+	}
+	// Otherwise, return the configured authentication method (email, ldap, etc.)
 	return config.getEnv('userManagement.authenticationMethod');
 }
 
@@ -43,11 +53,6 @@ export function isSsoJustInTimeProvisioningEnabled(): boolean {
 
 export function doRedirectUsersFromLoginToSsoFlow(): boolean {
 	return config.getEnv('sso.redirectLoginToSso');
-}
-
-// OIDC-specific helper functions
-export function isOidcEnabled(): boolean {
-	return process.env.N8N_SSO_OIDC_ENABLED === 'true';
 }
 
 export function getOidcLoginLabel(): string {
