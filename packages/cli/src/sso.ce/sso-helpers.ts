@@ -47,7 +47,7 @@ export function doRedirectUsersFromLoginToSsoFlow(): boolean {
 
 // OIDC-specific helper functions
 export function isOidcEnabled(): boolean {
-	return process.env.SSO_OIDC_ENABLED === 'true';
+	return process.env.N8N_SSO_OIDC_ENABLED === 'true';
 }
 
 export function getOidcLoginLabel(): string {
