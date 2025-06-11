@@ -472,6 +472,9 @@ importers:
       '@n8n/typescript-config':
         specifier: workspace:*
         version: link:../typescript-config
+      jest-expect-message:
+        specifier: ^1.1.3
+        version: 1.1.3
 
   packages/@n8n/backend-common:
     dependencies:
@@ -20757,6 +20760,7 @@ snapshots:
   '@rudderstack/rudder-sdk-node@2.1.4(tslib@2.8.1)':
     dependencies:
       axios: 1.8.3
+      axios: 1.8.3
       axios-retry: 4.5.0(axios@1.8.3)
       component-type: 2.0.0
       join-component: 1.1.0
@@ -23335,6 +23339,7 @@ snapshots:
 
   axios-retry@4.5.0(axios@1.8.3):
     dependencies:
+      axios: 1.8.3
       axios: 1.8.3
       is-retry-allowed: 2.2.0
 

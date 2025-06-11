@@ -3360,6 +3360,5 @@
 	"insights.upgradeModal.perks.2": "Gain deeper visibility into workflow trends over time",
 	"insights.upgradeModal.title": "Upgrade to Enterprise",
 	"sso.oidc.login.button": "Sign in with OIDC",
-	"sso.saml.login.button": "Sign in with SAML",
-	"sso.login.button": "Continue with SSO"
+	"sso.saml.login.button": "Sign in with SAML"
 }

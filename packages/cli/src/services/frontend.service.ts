@@ -22,8 +22,13 @@ import { LoadNodesAndCredentials } from '@/load-nodes-and-credentials';
 import { MfaService } from '@/mfa/mfa.service';
 import { isApiEnabled } from '@/public-api';
 import { PushConfig } from '@/push/push.config';
+import type { CommunityPackagesService } from '@/services/community-packages.service';
+import {
+	getCurrentAuthenticationMethod,
+	isOidcEnabled,
+	getOidcLoginLabel,
+} from '@/sso.ce/sso-helpers';
 import { getSamlLoginLabel } from '@/sso.ee/saml/saml-helpers';
-import { getCurrentAuthenticationMethod } from '@/sso.ee/sso-helpers';
 import { UserManagementMailer } from '@/user-management/email';
 import {
 	getWorkflowHistoryLicensePruneTime,
@@ -162,7 +167,7 @@ export class FrontendService {
 				quota: this.license.getUsersLimit(),
 				showSetupOnFirstLoad: !config.getEnv('userManagement.isInstanceOwnerSetUp'),
 				smtpSetup: this.mailer.isEmailSetUp,
-				authenticationMethod: getCurrentAuthenticationMethod() as any,
+				authenticationMethod: getCurrentAuthenticationMethod(),
 			},
 			sso: {
 				saml: {
@@ -372,9 +377,23 @@ export class FrontendService {
 			});
 		}
 
-		if (this.licenseState.isOidcLicensed()) {
+		// if (this.licenseState.isOidcLicensed()) {
+		// 	Object.assign(this.settings.sso.oidc, {
+		// 		loginEnabled: this.globalConfig.sso.oidc.loginEnabled,
+		// 	});
+		// }
+
+		if (isOidcEnabled()) {
 			Object.assign(this.settings.sso.oidc, {
-				loginEnabled: this.globalConfig.sso.oidc.loginEnabled,
+				loginLabel: getOidcLoginLabel(),
+				loginEnabled: true,
+			});
+		}
+
+		if (isOidcEnabled()) {
+			Object.assign(this.settings.sso.oidc, {
+				loginLabel: getOidcLoginLabel(),
+				loginEnabled: true,
 			});
 		}
 

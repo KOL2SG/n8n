@@ -44,3 +44,16 @@ export function isSsoJustInTimeProvisioningEnabled(): boolean {
 export function doRedirectUsersFromLoginToSsoFlow(): boolean {
 	return config.getEnv('sso.redirectLoginToSso');
 }
+
+// OIDC-specific helper functions
+export function isOidcEnabled(): boolean {
+	return process.env.SSO_OIDC_ENABLED === 'true';
+}
+
+export function getOidcLoginLabel(): string {
+	return 'OIDC';
+}
+
+export function shouldRedirectLoginToSso(): boolean {
+	return isOidcEnabled() && doRedirectUsersFromLoginToSsoFlow();
+}

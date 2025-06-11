@@ -97,6 +97,10 @@ export interface FrontendSettings {
 			loginLabel: string;
 			loginEnabled: boolean;
 		};
+		oidc: {
+			loginLabel: string;
+			loginEnabled: boolean;
+		};
 	};
 	publicApi: {
 		enabled: boolean;
