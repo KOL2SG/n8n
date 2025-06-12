@@ -4,12 +4,14 @@ import { ROLE, type Role } from '@n8n/api-types';
 import { useI18n } from '@n8n/i18n';
 import { useToast } from '@/composables/useToast';
 import { useDocumentTitle } from '@/composables/useDocumentTitle';
+import { useOidcHelpers } from '@/composables/useOidcHelpers';
 import type { IFormInputs, IUser, ThemeOption } from '@/Interface';
 import {
 	CHANGE_PASSWORD_MODAL_KEY,
 	MFA_DOCS_URL,
 	MFA_SETUP_MODAL_KEY,
 	PROMPT_MFA_CODE_MODAL_KEY,
+	VIEWS,
 } from '@/constants';
 import { useUIStore } from '@/stores/ui.store';
 import { useUsersStore } from '@/stores/users.store';
@@ -39,6 +41,8 @@ type RoleContent = {
 const i18n = useI18n();
 const { showToast, showError } = useToast();
 const documentTitle = useDocumentTitle();
+const router = useRouter();
+const { hasOidcIdentity } = useOidcHelpers();
 
 const hasAnyBasicInfoChanges = ref<boolean>(false);
 const formInputs = ref<null | IFormInputs>(null);
@@ -72,11 +76,10 @@ const currentUser = computed((): IUser | null => {
 
 const isExternalAuthEnabled = computed((): boolean => {
 	const isLdapEnabled =
-		ssoStore.isEnterpriseLdapEnabled && currentUser.value?.signInType === 'ldap';
-	const isSamlEnabled = ssoStore.isSamlLoginEnabled && ssoStore.isDefaultAuthenticationSaml;
-	const isOidcEnabled =
-		ssoStore.isEnterpriseOidcEnabled && currentUser.value?.signInType === 'oidc';
-	return isLdapEnabled || isSamlEnabled || isOidcEnabled;
+		settingsStore.settings.enterprise.ldap && currentUser.value?.signInType === 'ldap';
+	const isSamlEnabled =
+		settingsStore.isSamlLoginEnabled && settingsStore.isDefaultAuthenticationSaml;
+	return isLdapEnabled || isSamlEnabled;
 });
 const hasOidcIdentity = computed((): boolean => {
 	// Check if user has OIDC identity
@@ -148,6 +151,10 @@ const currentUserRole = computed<RoleContent>(() => roles.value[usersStore.globa
 
 onMounted(() => {
 	documentTitle.set(i18n.baseText('settings.personal.personalSettings'));
+	if (hasOidcIdentity.value) {
+		void router.push({ name: VIEWS.SETTINGS });
+		return;
+	}
 	formInputs.value = [
 		{
 			name: 'firstName',

@@ -3359,6 +3359,6 @@
 	"insights.upgradeModal.perks.1": "Zoom into last 24 hours with hourly granularity",
 	"insights.upgradeModal.perks.2": "Gain deeper visibility into workflow trends over time",
 	"insights.upgradeModal.title": "Upgrade to Enterprise",
-	"sso.oidc.login.button": "Sign in with OIDC",
+	"sso.oidc.login.button": "Sign in with Bosch SSO",
 	"sso.saml.login.button": "Sign in with SAML"
 }

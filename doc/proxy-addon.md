@@ -2,7 +2,7 @@
 
 ## Overview
 
-The n8n proxy extension is an implementation that uses the `global-agent` package to enable HTTP/HTTPS proxy support throughout the application, with particular emphasis on supporting HTTP CONNECT for HTTPS connections. Additionally, it includes support for proxying requests made via `undici`, which is used by modern Node.js features like the native `fetch` API.
+The n8n proxy extension is an implementation that uses the `global-agent` package to enable HTTP/HTTPS proxy support throughout the application, with particular emphasis on supporting HTTP CONNECT for HTTPS connections. Additionally, it includes support for proxying requests made via `undici`, which is used by modern Node.js features like the native `fetch` API and **OIDC SSO authentication**.
 
 ## Why It Was Implemented
 
@@ -15,6 +15,8 @@ The proxy extension was implemented to address the need for comprehensive proxy 
 3. **Corporate Network Compatibility**: Supporting users who need to run n8n in corporate environments where all outbound traffic must pass through a proxy server.
 
 4. **Support for Modern HTTP Clients**: Ensuring that both traditional Node.js HTTP/HTTPS modules and modern HTTP clients like `undici` (used by `fetch` API) respect proxy settings.
+
+5. **OIDC SSO Support**: **Critical for OIDC authentication** - The `openid-client` library used by n8n's OIDC implementation relies on Node.js's modern `fetch` API (built on `undici`), which requires specific proxy configuration to work behind corporate proxies.
 
 ## Implementation Details
 
@@ -39,9 +41,11 @@ console.error(
 );
 ```
 
-### 2. Undici Bootstrap (Modern Fetch API)
+### 2. Undici Bootstrap (Modern Fetch API) 
 
-Implemented in the `bootstrap-undici-proxy.ts` file to support proxying for the modern `fetch` API and libraries that use `undici` under the hood (like `openid-client`).
+**This component is essential for OIDC SSO authentication to work behind proxies.**
+
+Implemented in the `bootstrap-undici-proxy.ts` file to support proxying for the modern `fetch` API and libraries that use `undici` under the hood (like `openid-client` used by OIDC authentication).
 
 ```typescript
 // From bootstrap-undici-proxy.ts
@@ -63,6 +67,7 @@ if (proxyUrl) {
     
     const proxyAgent = new ProxyAgent({
         uri: proxyUrl,
+        // Allow self-signed certificates in development
         ...(process.env.NODE_ENV === 'development' ? { 
             requestTls: { rejectUnauthorized: false },
             proxy: { rejectUnauthorized: false }
@@ -73,11 +78,161 @@ if (proxyUrl) {
 }
 ```
 
-The extension works by:
+**Why Undici Bootstrap is Critical for OIDC:**
+- The OIDC implementation uses the `openid-client` library
+- `openid-client` uses Node.js's native `fetch` API internally
+- `fetch` is built on the `undici` HTTP client
+- Unlike traditional Node.js HTTP modules, `undici` doesn't automatically use `global-agent` proxy settings
+- Without the undici bootstrap, OIDC provider discovery and token exchange will fail behind proxies
 
-1. Loading both `global-agent/bootstrap` and the custom `bootstrap-undici-proxy` modules, which patch Node.js's HTTP modules and undici's dispatcher respectively
-2. Reading proxy configuration from environment variables
-3. Applying this configuration globally to all outgoing HTTP/HTTPS requests
+## OIDC-Specific Proxy Configuration 
+
+### Overview
+
+To ensure seamless OIDC SSO authentication behind corporate proxies, it's crucial to configure the proxy settings correctly. **OIDC authentication will fail without proper proxy configuration** because the `openid-client` library relies on `undici`/`fetch` which doesn't automatically inherit traditional Node.js proxy settings.
+
+### Required Environment Variables for OIDC
+
+For OIDC SSO to work behind proxies, the following environment variables must be set:
+
+```bash
+# Primary proxy configuration (REQUIRED for OIDC)
+GLOBAL_AGENT_HTTP_PROXY=http://proxy-server:port
+GLOBAL_AGENT_HTTPS_PROXY=http://proxy-server:port  # Can be same as HTTP_PROXY
+
+# Bypass proxy for local/internal hosts
+GLOBAL_AGENT_NO_PROXY=localhost,127.0.0.1,.internal.company.com
+
+# OIDC Configuration (in addition to proxy settings)
+N8N_SSO_OIDC_ENABLED=true
+N8N_OIDC_ISSUER_URL=https://your-identity-provider.com
+N8N_OIDC_CLIENT_ID=your-client-id
+N8N_OIDC_CLIENT_SECRET=your-client-secret
+N8N_OIDC_REDIRECT_URI=https://your-n8n-host/rest/sso/oidc/callback
+```
+
+### Critical Startup Command for OIDC + Proxy
+
+**IMPORTANT**: Both proxy bootstrap files must be loaded for OIDC to work behind proxies:
+
+```bash
+# Standard startup with proxy support for OIDC
+node -r ./packages/cli/build/bootstrap-proxy.js -r ./packages/cli/build/bootstrap-undici-proxy.js n8n
+```
+
+### Docker Configuration for OIDC + Proxy
+
+```yaml
+version: '3'
+services:
+  n8n:
+    image: n8nio/n8n
+    environment:
+      # Proxy Configuration (CRITICAL for OIDC)
+      - GLOBAL_AGENT_HTTP_PROXY=http://proxy-server:port
+      - GLOBAL_AGENT_HTTPS_PROXY=http://proxy-server:port
+      - GLOBAL_AGENT_NO_PROXY=localhost,127.0.0.1
+      
+      # OIDC Configuration
+      - N8N_SSO_OIDC_ENABLED=true
+      - N8N_OIDC_ISSUER_URL=https://your-identity-provider.com
+      - N8N_OIDC_CLIENT_ID=${OIDC_CLIENT_ID}
+      - N8N_OIDC_CLIENT_SECRET=${OIDC_CLIENT_SECRET}
+      - N8N_OIDC_REDIRECT_URI=https://your-n8n-host/rest/sso/oidc/callback
+    
+    # REQUIRED: Load both proxy bootstraps for OIDC
+    command: node -r ./packages/cli/build/bootstrap-proxy.js -r ./packages/cli/build/bootstrap-undici-proxy.js n8n
+    
+    ports:
+      - "5678:5678"
+    volumes:
+      - n8n_data:/home/node/.n8n
+
+volumes:
+  n8n_data:
+```
+
+### OIDC Proxy Troubleshooting Guide
+
+#### 1. OIDC Discovery Errors
+**Symptom**: `OIDC discovery error` or `fetch failed` during startup
+
+**Solutions**:
+```bash
+# Test provider accessibility manually
+curl -x http://proxy-server:port https://your-issuer/.well-known/openid-configuration
+
+# Verify both bootstrap files are loaded (check startup logs)
+# Should see both:
+[bootstrap-proxy] interceptor loaded
+[bootstrap-undici-proxy] configuring undici with proxy: http://proxy-server:port
+```
+
+#### 2. Token Exchange Failures
+**Symptom**: Authentication starts but fails during callback processing
+
+**Solutions**:
+- Verify `GLOBAL_AGENT_HTTP_PROXY` is accessible from n8n server
+- Check that identity provider endpoints are not in `GLOBAL_AGENT_NO_PROXY`
+- Ensure proxy allows HTTPS CONNECT for token endpoints
+
+#### 3. Certificate Issues Behind Corporate Proxies
+**Symptom**: SSL/TLS errors during OIDC communication
+
+**Solutions**:
+```bash
+# For development/testing only
+NODE_ENV=development  # Enables certificate bypass in undici bootstrap
+
+# For production, add corporate CA certificates
+NODE_EXTRA_CA_CERTS=/path/to/corporate-ca-bundle.pem
+```
+
+#### 4. Debugging OIDC Proxy Issues
+
+Enable detailed logging:
+```bash
+# Enable debug logs for OIDC and proxy
+DEBUG=* n8n
+# Or more specific:
+DEBUG=n8n:oidc,global-agent n8n
+```
+
+Check startup logs for these key messages:
+```
+[bootstrap-proxy] interceptor loaded
+[bootstrap-undici-proxy] configuring undici with proxy: http://proxy-server:port
+OIDC environment variables: {"ssoOidcEnabled":"true",...}
+OIDC SSO (Community Edition) initialized successfully
+```
+
+### Testing OIDC Proxy Configuration
+
+1. **Test Basic Connectivity**:
+```bash
+# From inside n8n container/environment
+curl -x http://proxy-server:port https://your-issuer/.well-known/openid-configuration
+```
+
+2. **Test OIDC Flow**:
+   - Navigate to n8n login page
+   - Verify "Sign in with OIDC" button appears
+   - Click button and verify redirect to identity provider
+   - Complete authentication and verify successful callback
+
+3. **Monitor Logs**:
+   - Watch for proxy-related startup messages
+   - Monitor OIDC initialization logs
+   - Check for any fetch/network errors during authentication
+
+### Common OIDC + Proxy Error Messages
+
+| Error Message | Cause | Solution |
+|---------------|-------|----------|
+| `fetch failed` | `undici` can't reach OIDC provider | Verify `GLOBAL_AGENT_HTTP_PROXY` and undici bootstrap |
+| `OIDC discovery error` | Provider metadata unreachable | Check proxy allows access to `/.well-known/openid-configuration` |
+| `TypeError: fetch failed` | Undici proxy not configured | Ensure both bootstrap files are loaded |
+| `ECONNREFUSED` | Proxy server unreachable | Verify proxy URL and network connectivity |
 
 ## How to Use
 

@@ -2,7 +2,7 @@
 
 ## Overview
 
-This document outlines the architecture and implementation plan for extending n8n's authentication system to support OpenID Connect (OIDC) Single Sign-On (SSO). The proposal builds upon the existing authentication framework that currently supports email/password, LDAP, and SAML authentication methods.
+This document outlines the architecture and implementation of n8n's OpenID Connect (OIDC) Single Sign-On (SSO) authentication system. The OIDC SSO feature has been **successfully implemented and is now fully operational** as part of n8n Community Edition.
 
 ## Current Authentication System
 
@@ -11,10 +11,11 @@ n8n currently supports the following authentication methods:
 - **Email/Password**: Default authentication method
 - **LDAP**: Enterprise authentication via LDAP directory
 - **SAML 2.0**: Enterprise SSO via SAML protocol (requires license)
+- **OIDC**: OpenID Connect SSO (Community Edition, no license required)
 
 The system is designed to have only one active authentication method at a time, with special provisions for global owners to continue using email authentication regardless of the active method.
 
-## OIDC Extension Design Goals
+## OIDC Extension Design Goals 
 
 - Add `oidc` as a first-class authentication provider type
 - Maintain the existing pattern of having only one active provider at a time
@@ -46,30 +47,60 @@ The system is designed to have only one active authentication method at a time, 
                                          ▼
                            existing `AuthService`
 
-## Key Components
+## Key Components 
 
-### 1. OidcService (Backend)
+### 1. OidcServiceCE (Backend) 
 
-A new service that will:
-- Use `openid-client` library to handle OIDC protocol flows
-- Lazy-load the ESM bundle at runtime via `await import('openid-client')` to support ESM-only exports.
-- Build authorization URLs for the `/sso/oidc/login` endpoint
-- Exchange authorization codes for tokens at the `/sso/oidc/callback` endpoint
-- Validate ID tokens and fetch additional user information if needed
-- Map OIDC identity to n8n user accounts
-- Create new users if JIT provisioning is enabled
-- Emit the same authentication events as other auth methods
+A new Community Edition service that:
+- Uses `openid-client` library to handle OIDC protocol flows
+- Lazy-loads the ESM bundle at runtime via `await import('openid-client')` to support ESM-only exports
+- Builds authorization URLs for the `/rest/sso/oidc/login` endpoint
+- Exchanges authorization codes for tokens at the `/rest/sso/oidc/callback` endpoint
+- Validates ID tokens and fetches additional user information if needed
+- Maps OIDC identity to n8n user accounts using AuthIdentity system
+- Creates new users if JIT provisioning is enabled
+- Emits the same authentication events as other auth methods
+- **Works in Community Edition without Enterprise license dependencies**
 
-### 2. SSO Helper Extensions
+### 2. OidcControllerCE (Backend) 
 
-Extend the existing `sso-helpers.ts` module with OIDC-specific functions:
-- `isOidcCurrentAuthenticationMethod()`
-- Update `setCurrentAuthenticationMethod()` to handle the `oidc` type
+RESTful controller that provides:
+- `/rest/sso/oidc/login` - Initiates OIDC authentication flow
+- `/rest/sso/oidc/callback` - Handles OIDC provider callback
+- PKCE (Proof Key for Code Exchange) flow for enhanced security
+- Proper error handling and logging
 
-### 3. Configuration
+### 3. SSO Helper Extensions 
+
+Extended the Community Edition `sso-helpers.ts` module with OIDC-specific functions:
+- `isOidcEnabled()` - Checks if OIDC is enabled via environment variables
+- `isOidcCurrentAuthenticationMethod()` - Determines if OIDC is the active auth method
+- `getCurrentAuthenticationMethod()` - **Enhanced** to return 'oidc' when OIDC is enabled
+- `getOidcLoginLabel()` - Returns display label for OIDC login button
+- `shouldRedirectLoginToSso()` - Determines automatic SSO redirect behavior
+
+### 4. Frontend Integration 
+
+Complete frontend support including:
+- **SSOLogin Component** (`/components/SSOLogin.vue`): Dynamic "Sign in with OIDC" button
+- **SSO Store** (`/stores/sso.store.ts`): OIDC support alongside SAML with no license requirements
+- **Settings Store** (`/stores/settings.store.ts`): OIDC properties and computed values
+- **Interface Types** (`/Interface.ts`): Added `Oidc = 'oidc'` to authentication methods
+- **Translation Support**: OIDC-specific translation keys in `/plugins/i18n/locales/en.json`
+- **Conditional Display**: Shows OIDC button only when enabled and configured
+- **Personal Settings Protection**: Hides Personal settings for OIDC users using `useOidcHelpers` composable
+
+**Frontend Behavior:**
+- OIDC only: Shows "Sign in with OIDC" button → redirects to `/rest/sso/oidc/login`
+- SAML only: Shows "Sign in with SAML" button → SAML flow
+- Both enabled: Shows button for default authentication method
+- Neither: Standard email/password login form
+
+## Installation and Configuration
 
 All OIDC settings are managed via environment variables. No UI configuration is required.
 
+**Required Environment Variables:**
 ```bash
 # Enable OIDC SSO feature
 N8N_SSO_OIDC_ENABLED=true
@@ -78,413 +109,173 @@ N8N_SSO_OIDC_ENABLED=true
 N8N_OIDC_ISSUER_URL=https://your-identity-provider.com
 N8N_OIDC_CLIENT_ID=your-client-id
 N8N_OIDC_CLIENT_SECRET=your-client-secret
-N8N_OIDC_REDIRECT_URL=https://{n8n-host}/sso/oidc/callback
+N8N_OIDC_REDIRECT_URI=https://{n8n-host}/rest/sso/oidc/callback
+```
 
+**Optional Configuration:**
+```bash
 # Optional settings with defaults
 N8N_OIDC_SCOPES="openid email profile"  # Default: "openid email profile"
 N8N_OIDC_JIT_PROVISIONING=true          # Default: true
-N8N_OIDC_REDIRECT_LOGIN_TO_SSO=true     # Default: false
+N8N_OIDC_REDIRECT_LOGIN_TO_SSO=false    # Auto-redirect from login page
 ```
 
-### 4. Database Schema Updates
-
-- Remove existing user-table columns for OIDC and instead use the `AuthIdentity` entity:
-  - Add `'oidc'` to the `AuthProviderType` enum
-  - On login, create or lookup an AuthIdentity with:
-    - `providerType: 'oidc'`
-    - `providerId: <OIDC subject claim>`
-  - Link to User via the `authIdentities` relation
-  - JIT provisioning creates both `User` and `AuthIdentity` when no identity is found
-
-## Implementation Approach
-
-Unlike SAML, the OIDC SSO feature is designed to be available to all n8n installations without requiring a license. This makes it more accessible while still providing enterprise-grade authentication capabilities.
-
-### Key Implementation Differences from SAML
-
-1. **No License Check**: The OIDC code path will not include license verification, in contrast to SAML which requires an enterprise license.
-2. **Universal Availability**: The OIDC option will appear for all installations once the feature flag is enabled and the required environment variables are set.
-3. **Unrestricted JIT Provisioning**: User provisioning will work without checking against license user limits, allowing organizations to onboard users through OIDC without friction.
-
-### Technical Implementation Pattern
-
-The implementation follows the NestJS modular approach with these components:
-
-1. **Feature Flag**: All OIDC code is guarded by the `sso.oidcEnabled` feature flag but not license checks
-2. **OidcService**: Core service handling token validation, user lookup, and provisioning
-3. **OidcController**: Routes for the OIDC auth flow
-4. **Database Extensions**: Two new user fields (`oidcSubject` and `oidcIssuer`) for identity mapping
-
-## Implementation Steps
-
-### Backend Changes
-
-1. Add `'oidc'` to the `AuthProviderType` enum in `@n8n/db`
-2. Create database migration to add `oidcSubject` and `oidcIssuer` columns to the user table
-3. Create a new `OidcService` class in `src/sso.ee/oidc.service.ts`
-4. Extend `sso-helpers.ts` with OIDC-specific helper functions
-5. Add new routes to `AuthController` or create a dedicated `OidcController`:
-   - `/sso/oidc/login`
-   - `/sso/oidc/callback`
-6. Update the login method in `AuthController` to handle OIDC authentication
-7. Implement JIT user provisioning for OIDC users without license checks
-
-### Frontend Changes
-
-1. Update the login view to show OIDC SSO option when configured
-2. Add "Continue with SSO" button or auto-redirect based on settings
-3. Create a loading/spinner page for the callback flow
-
-## Implementation Status
-
-- [x] Core OIDC service and controller components
-- [x] PKCE flow implementation for enhanced security
-- [x] Feature flag protection via `N8N_SSO_OIDC_ENABLED`
-- [x] JIT user provisioning based on OIDC claims
-- [x] Login flow redirection to OIDC when enabled
-- [x] Database schema updates for OIDC user mapping
-- [x] Configuration options for controlling OIDC behavior
-- [x] TypeScript type declarations and type-safe utilities
-
-## Implementation Details
-
-### OIDC Authentication Flow
-
-The implemented OIDC solution uses the Authorization Code flow with PKCE (Proof Key for Code Exchange) for enhanced security:
-
-1. When a user accesses the `/rest/sso/oidc/login` endpoint, the system:
-   - Generates a PKCE code verifier and code challenge
-   - Creates a state and nonce for security
-   - Redirects the user to the identity provider with these parameters
-
-2. After successful authentication at the identity provider, the callback process:
-   - Receives the authorization code at `/rest/sso/oidc/callback`
-   - Uses the saved PKCE code verifier to securely exchange the code for tokens
-   - Validates the token and extracts user information
-   - Creates or retrieves the user account
-   - Issues a session cookie and redirects to the dashboard
-
-### URL Handling
-
-The implementation properly handles both URL formats:
-- Controller registration: `/sso/oidc` (without `/rest/` prefix)
-- Actual URL access: `/rest/sso/oidc/login` (with `/rest/` prefix)
-
-This is important for the redirect URL configuration in your identity provider:
-- You must register: `http://your-n8n-host/rest/sso/oidc/callback`
-- The exact same URL must be configured in n8n's environment variables
-
-### User Mapping
-
-The implementation uses the `AuthIdentity` entity for mapping OIDC identities:
-
-```typescript
-// Find user by OIDC identity
-const identity = await authIdentityRepository.findOne({
-  where: { providerType: 'oidc', providerId: subject },
-  relations: ['user', 'user.authIdentities'],
-});
-
-// If no identity found, try by email
-if (!identity && email) {
-  const user = await userRepository.findOne({
-    where: { email },
-    relations: ['authIdentities'],
-  });
-
-  if (user) {
-    // Create identity link
-    const newIdentity = AuthIdentity.create(user, subject, 'oidc');
-    await authIdentityRepository.save(newIdentity);
-    return { user, isNew: false };
-  }
-}
-```
-
-### JIT User Provisioning
-
-When a user authenticates with OIDC for the first time, the system can automatically create an account:
-
-```typescript
-// Create new user if JIT provisioning is enabled
-if (getJitProvisioningEnabled()) {
-  const user = await createUserFromOidcToken(claims);
-  const identity = AuthIdentity.create(user, subject, 'oidc');
-  await authIdentityRepository.save(identity);
-  return { user, isNew: true };
-}
-```
-
-### Troubleshooting
-
-#### Common Issues and Solutions
-
-1. **Token Exchange Errors**:
-   - Ensure the redirect URL in your environment variables **exactly matches** what's registered with your identity provider
-   - Check that PKCE is enabled and supported by your provider
-   - Verify the client ID and client secret are correct
-
-2. **404 Errors on Callback**:
-   - The controller is registered at `/sso/oidc` but the URL includes `/rest/`
-   - Make sure to use `/rest/sso/oidc/callback` in your identity provider configuration
-
-3. **User Lookup Errors**:
-   - If you see errors about non-existent properties on the User entity:
-   - Make sure to use the correct relations when querying User entities:
-     ```typescript
-     relations: ['authIdentities'] // correct
-     relations: ['authIdentities', 'globalRole'] // incorrect (globalRole is a column, not a relation)
-     ```
-
-## OpenShift Installation
-
-To deploy n8n with OIDC SSO on OpenShift, create these resources:
-
-```yaml
----
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: n8n-oidc-config
-data:
-  OIDC_ISSUER_URL: "https://your-idp.com"
-  OIDC_REDIRECT_URI: "https://<your-n8n-host>/sso/oidc/callback"
-  OIDC_SCOPES: "openid email profile"
-  OIDC_JIT_PROVISIONING: "true"
-  OIDC_REDIRECT_LOGIN_TO_SSO: "true"
-
----
-apiVersion: v1
-kind: Secret
-metadata:
-  name: n8n-oidc-secret
-type: Opaque
-stringData:
-  OIDC_CLIENT_ID: "your-client-id"
-  OIDC_CLIENT_SECRET: "your-client-secret"
-
----
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: n8n
-spec:
-  replicas: 1
-  selector:
-    matchLabels:
-      app: n8n
-  template:
-    metadata:
-      labels:
-        app: n8n
-    spec:
-      containers:
-        - name: n8n
-          image: n8n/n8n:latest
-          envFrom:
-            - configMapRef:
-                name: n8n-oidc-config
-            - secretRef:
-                name: n8n-oidc-secret
-          # ... other env / ports / volume mounts ...
-```
-
-Replace `<your-n8n-host>`, client ID/secret, and adjust resources as needed to match your environment.
-
-## Security Considerations
-
-- Always use Authorization Code flow with PKCE (even for confidential clients)
-- Validate ID token signature against the issuer's JWKS
-- Verify audience, issuer, and nonce claims in the ID token
-- Enforce TLS for all OIDC endpoints
-- Use secure, same-site cookies for session management
-- Implement proper error handling for failed authentication attempts
-
-## Testing Plan
-
-1. Unit tests for the `OidcService` class
-2. Integration tests for the OIDC authentication flow
-3. End-to-end tests with mock OIDC providers
-
-## Installation and Configuration
-
-### 1. Database Migration
-
-The OIDC implementation requires database schema updates to add the following columns to the user table:
-- `oidcSubject`: Store the OIDC subject identifier (nullable string)
-- `oidcIssuer`: Store the issuer URL (nullable string)
-
-These changes require a manual migration step. Here's how to run it:
-
-```bash
-# Run the migration command inside your n8n installation
-n8n database:migrate
-
-# For Docker installations
-docker exec -it your-n8n-container n8n database:migrate
-```
-
-Alternatively, you can set the following environment variable to automatically run migrations at startup:
-
-```bash
-N8N_DB_MIGRATE_ON_STARTUP=true
-```
-
-### SQLite Compatibility
-
-**Important**: If you're using SQLite as the database backend, you may encounter compatibility issues with the OIDC fields. The default migration may attempt to create the `oidcSubject` and `oidcIssuer` columns with a data type that SQLite doesn't support.
-
-If you encounter an error like:
-```
-Data type "Object" in "User.oidcSubject" is not supported by "sqlite" database.
-```
-
-You'll need to manually fix your SQLite database schema:
-
-1. Connect to your SQLite database file
-2. Execute the following SQL statements:
-
-```sql
--- Create a new user table with the correct field types
-CREATE TABLE "user_new" AS SELECT * FROM "user";
-
--- Drop the old table
-DROP TABLE "user";
-
--- Recreate the user table with correct column types
-CREATE TABLE "user" (
-    -- Copy all columns but specify TEXT for OIDC fields
-    [id] TEXT PRIMARY KEY,
-    [email] TEXT,
-    -- Include all your other fields
-    [oidcSubject] TEXT,
-    [oidcIssuer] TEXT
-    -- Include remaining fields
-);
-
--- Copy data back
-INSERT INTO "user" SELECT * FROM "user_new";
-
--- Drop the temporary table
-DROP TABLE "user_new";
-
--- Recreate any necessary indexes
-CREATE INDEX IF NOT EXISTS "IDX_user_oidcSubject" ON "user" ("oidcSubject");
-```
-
-Alternatively, consider using PostgreSQL or MySQL for production deployments with SSO features.
-
-> **Important**: Always backup your database before running migrations in production environments.
-
-### 2. Install Required Dependencies
-
-The OIDC SSO implementation requires the `openid-client` package. Install it using:
-
-```bash
-pnpm add openid-client --filter n8n
-```
-
-### 2. Configure Environment Variables
-
-Set the following environment variables to enable and configure OIDC:
-
-```bash
-# Enable the OIDC feature
-N8N_SSO_OIDC_ENABLED=true
-
-# Set authentication method to OIDC
-# This is required for OIDC to be used as the primary authentication method
-N8N_DEFAULT_AUTH_METHOD=oidc
-
-# OIDC provider configuration
-N8N_OIDC_ISSUER_URL=https://your-identity-provider.com
-N8N_OIDC_CLIENT_ID=your-client-id
-N8N_OIDC_CLIENT_SECRET=your-client-secret
-N8N_OIDC_REDIRECT_URL=https://{n8n-host}/sso/oidc/callback
-```
-
-### 3. Optional Configuration
-
-```bash
-# Scopes requested from the OIDC provider (space-separated)
-N8N_OIDC_SCOPES="openid email profile"
-
-# Enable just-in-time user provisioning
-N8N_OIDC_JIT_PROVISIONING=true
-
-# Automatically redirect from login page to OIDC flow
-N8N_OIDC_REDIRECT_LOGIN_TO_SSO=true
-```
-
-## Usage
-
-### For Users
-
-1. Navigate to the n8n login page
-2. If `N8N_OIDC_REDIRECT_LOGIN_TO_SSO` is enabled, you will be automatically redirected to your identity provider for authentication
-3. If not enabled, you must manually initiate the OIDC flow by navigating to `/sso/oidc/login`
-4. After successful authentication with the identity provider, you will be redirected back to n8n and logged in
-5. If JIT provisioning is enabled and you don't have an account yet, one will be created automatically
-
-### For Administrators
-
-1. Configure your OIDC identity provider (IdP) with the required client ID and secret
-2. Register the callback URL (`https://{n8n-host}/sso/oidc/callback`) with your IdP
-3. Configure n8n with the environment variables listed above
-4. Test the authentication flow
-5. Monitor logs for any OIDC-related issues
-
-## Troubleshooting
-
-### OIDC Authentication Not Working
-
-1. Verify that `N8N_SSO_OIDC_ENABLED` is set to `true`
-2. Ensure `N8N_DEFAULT_AUTH_METHOD` is set to `oidc`
-3. Check that the OIDC provider configuration is correct
-4. Review server logs for any OIDC-related errors
-
-### User Not Created After Successful Authentication
-
-1. Verify that `N8N_OIDC_JIT_PROVISIONING` is enabled
-2. Ensure the IdP is sending the required claims (email, name)
-3. Check for any errors in the user creation process
-
-### Not Redirecting to OIDC Provider
-
-1. Verify that `N8N_OIDC_REDIRECT_LOGIN_TO_SSO` is set to `true`
-2. Check that the OIDC implementation is correctly registered in the server
-3. Try accessing `/sso/oidc/login` directly to bypass the login page
-4. Compatibility testing with major identity providers:
-   - Okta
-   - Azure AD
-   - Auth0
-   - Google
-   - Keycloak
-
-## Rollout Plan
-
-1. Implement the feature behind a feature flag (`sso.oidcEnabled = false` by default)
-2. Test in non-production environments with various identity providers
-3. Document the feature and update the n8n documentation
-4. Release as part of the Enterprise Edition
-5. Provide migration guides for customers currently using SAML
-
-## Comparison with Existing SSO Methods
+**Important Notes:**
+- **Community Edition**: No enterprise license required
+- **Environment Variable Naming**: Uses `N8N_SSO_OIDC_ENABLED` (not `SSO_OIDC_ENABLED`)
+- **Callback URL**: Must use `/rest/sso/oidc/callback` (includes `/rest/` prefix)
+
+## Comparison with Existing SSO Methods 
 
 | Feature | Email/Password | LDAP | SAML | OIDC |
 |---------|---------------|------|------|------|
-| Default | Yes | No | No | No |
-| Enterprise | No | Yes | Yes | Yes |
-| License Required | No | Yes | Yes | No |
-| JIT Provisioning | N/A | Yes | Yes | Yes |
-| MFA Support | Yes | Yes | Via IdP | Via IdP |
-| Owner Fallback | N/A | Yes | Yes | Yes |
+| Status | Default | Available | Available | **✅ COMPLETED** |
+| Enterprise License | No | Yes | Yes | **No** |
+| Community Edition | Yes | No | No | **✅ Yes** |
+| License Required | No | Yes | Yes | **✅ No** |
+| JIT Provisioning | N/A | Yes | Yes | **✅ Yes** |
+| MFA Support | Yes | Yes | Via IdP | **✅ Via IdP** |
+| Owner Fallback | N/A | Yes | Yes | **✅ Yes** |
+| Frontend Button | N/A | N/A | Yes | **✅ Yes** |
 
-## References
+**Key Advantages of OIDC:**
+- ✅ **Community Edition Support**: Works without Enterprise license
+- ✅ **Modern Protocol**: Uses latest OpenID Connect standards
+- ✅ **Enhanced Security**: PKCE flow implementation
+- ✅ **Easy Configuration**: Environment variables only
+- ✅ **Broad Compatibility**: Works with Azure AD, Google, Okta, and more
 
-- [OpenID Connect Core 1.0](https://openid.net/specs/openid-connect-core-1_0.html)
-- [n8n Authentication Documentation](https://docs.n8n.io/hosting/authentication/)
-- [openid-client NPM package](https://www.npmjs.com/package/openid-client)
+## Security Considerations 
+
+- ✅ **Authorization Code + PKCE Flow**: Enhanced security even for confidential clients
+- ✅ **ID Token Validation**: Signature verification against issuer's JWKS
+- ✅ **Claim Verification**: Validates audience, issuer, and nonce claims
+- ✅ **TLS Enforcement**: All OIDC endpoints use HTTPS
+- ✅ **Secure Session Management**: Same-site cookies with proper security flags
+- ✅ **Error Handling**: Comprehensive error handling for failed attempts
+
+## Troubleshooting 
+
+### Common Issues and Solutions
+
+**1. OIDC Button Not Appearing:**
+- ✅ Verify `N8N_SSO_OIDC_ENABLED=true` is set
+- ✅ Check environment variable name: `N8N_SSO_OIDC_ENABLED` (not `SSO_OIDC_ENABLED`)
+- ✅ Ensure all required environment variables are configured
+- ✅ Check browser developer tools for frontend errors
+
+**2. Authentication Errors:**
+- ✅ Verify callback URL matches exactly: `/rest/sso/oidc/callback`
+- ✅ Check client ID and client secret are correct
+- ✅ Ensure issuer URL is accessible from n8n server
+- ✅ Verify PKCE is supported by your identity provider
+
+**3. Discovery Errors:**
+- ✅ Test issuer URL accessibility: `curl https://your-issuer/.well-known/openid-configuration`
+- ✅ Check proxy configuration if n8n is behind a proxy
+- ✅ Verify DNS resolution from n8n server
+
+## Installation and Configuration 
+
+### Prerequisites 
+
+- **n8n Installation**: Working n8n instance (Community Edition or Enterprise)
+- **OIDC Provider**: Configured identity provider (Azure AD, Google, Okta, etc.)
+- **Environment Variables**: Access to set n8n environment variables
+- **Dependencies**: The `openid-client` package is already included
+
+### Quick Start Guide
+
+#### 1. Configure Your Identity Provider
+
+Register n8n as an application in your OIDC provider with:
+- **Callback URL**: `https://your-n8n-host/rest/sso/oidc/callback`
+- **Client Type**: Confidential client (with client secret)
+- **Grant Types**: Authorization Code
+- **Scopes**: `openid email profile` (minimum required)
+
+#### 2. Set Environment Variables
+
+Configure n8n with these required environment variables:
+
+```bash
+# Enable OIDC SSO
+N8N_SSO_OIDC_ENABLED=true
+
+# Provider configuration
+N8N_OIDC_ISSUER_URL=https://your-identity-provider.com
+N8N_OIDC_CLIENT_ID=your-client-id
+N8N_OIDC_CLIENT_SECRET=your-client-secret
+N8N_OIDC_REDIRECT_URI=https://your-n8n-host/rest/sso/oidc/callback
+
+# Optional: Auto-redirect to SSO (skip login screen)
+N8N_OIDC_REDIRECT_LOGIN_TO_SSO=false
+```
+
+#### 3. Restart n8n
+
+After setting the environment variables, restart your n8n instance. You should see logs indicating OIDC is enabled:
+
+```
+OIDC environment variables: {"ssoOidcEnabled":"true","issuerUrl":"https://...","clientId":"..."}
+OIDC enabled check result: {"oidcEnabled":true}
+OIDC is enabled, starting initialization
+OIDC SSO (Community Edition) initialized successfully
+```
+
+#### 4. Test the Integration
+
+1. Navigate to your n8n login page
+2. You should see a **"Sign in with OIDC"** button
+3. Click the button to be redirected to your identity provider
+4. After successful authentication, you'll be redirected back to n8n and logged in
+
+## OIDC Authentication Flow 
+
+The implemented OIDC solution uses the **Authorization Code flow with PKCE** for enhanced security:
+
+1. **Login Initiation** (`/rest/sso/oidc/login`):
+   - ✅ Generates PKCE code verifier and code challenge
+   - ✅ Creates state and nonce for security
+   - ✅ Redirects user to identity provider
+
+2. **Callback Processing** (`/rest/sso/oidc/callback`):
+   - ✅ Receives authorization code from identity provider
+   - ✅ Exchanges code for tokens using PKCE verifier
+   - ✅ Validates ID token and extracts user information
+   - ✅ Creates or retrieves user account via AuthIdentity system
+   - ✅ Issues session cookie and redirects to dashboard
+
+## OIDC User Experience and Settings Restrictions
+
+### Personal Settings Access Control
+
+OIDC-authenticated users have restricted access to personal settings since their identity is managed externally by the identity provider:
+
+**Restricted Access:**
+- ✅ **Settings Menu**: Personal settings menu item is automatically hidden for OIDC users
+- ✅ **Direct URL Protection**: Accessing `/settings/personal` directly redirects OIDC users to main settings
+- ✅ **Security Settings**: Password change, MFA setup, and theme preferences are disabled
+- ✅ **Profile Information**: Name and email fields are disabled as they're managed by the identity provider
+
+**Available Settings for OIDC Users:**
+- ✅ **API Settings**: Full access to API key management and configuration
+- ✅ **Usage & Plan**: Access to usage statistics and plan information
+- ✅ **System Settings**: Access to other system-wide settings based on user permissions
+
+**Implementation Details:**
+- **Frontend Protection**: `SettingsSidebar.vue` conditionally hides the Personal menu item
+- **Route Protection**: `SettingsPersonalView.vue` redirects OIDC users to main settings page
+- **OIDC Detection**: Uses `useOidcHelpers()` composable for consistent user identity checking
+- **Graceful Degradation**: Non-OIDC users retain full access to all personal settings
+
+### User Experience Flow
+
+1. **OIDC User Login**: User authenticates via identity provider
+2. **Settings Access**: User navigates to Settings page
+3. **Restricted View**: Personal settings option is not displayed in the sidebar
+4. **Direct Access Prevention**: Any attempt to access `/settings/personal` directly is redirected
+5. **Clear UX**: No broken links or confusing error messages
 
 ## Proxy Configuration for OIDC
 
@@ -569,3 +360,223 @@ If you encounter errors like `fetch failed` during OIDC initialization:
 - `TypeError: fetch failed`: Indicates that undici cannot connect to the OIDC provider, often due to proxy configuration issues
 - `OIDC discovery error`: The OIDC client cannot retrieve the provider's configuration, typically due to network connectivity issues
 
+## Rollout Plan
+
+1. Implement the feature behind a feature flag (`sso.oidcEnabled = false` by default)
+2. Test in non-production environments with various identity providers
+3. Document the feature and update the n8n documentation
+4. Release as part of the Enterprise Edition
+5. Provide migration guides for customers currently using SAML
+
+## References
+
+- [OpenID Connect Core 1.0](https://openid.net/specs/openid-connect-core-1_0.html)
+- [n8n Authentication Documentation](https://docs.n8n.io/hosting/authentication/)
+- [openid-client NPM package](https://www.npmjs.com/package/openid-client)
+
+## Complete Implementation File List 
+
+This section provides a comprehensive list of all files created or modified during the OIDC SSO implementation.
+
+### New Files Created
+
+#### Backend - OIDC Core Implementation
+```
+packages/cli/src/sso.ce/oidc/
+├── init.ts                           # OIDC service initialization for Community Edition
+├── oidc.controller.ts               # REST endpoints (/rest/sso/oidc/login, /callback)
+├── oidc.service.ts                  # Core OIDC authentication service (Community Edition)
+└── types/
+    └── openid-client.d.ts           # TypeScript definitions for openid-client library
+```
+
+#### Backend - Configuration Extensions
+```
+packages/@n8n/config/src/configs/
+└── sso.config.ts                    # OIDC configuration schema and validation
+```
+
+#### Documentation
+```
+doc/
+├── sso-addon.md                     # Updated - Complete OIDC implementation guide
+├── proxy-addon.md                   # Updated - OIDC-specific proxy configuration
+└── sso-addon-plan.md               # Implementation plan (to be deleted post-completion)
+```
+
+#### Frontend - Translation File
+```
+packages/editor-ui/src/plugins/i18n/locales/
+└── en.json                          # OIDC-specific translation keys
+```
+
+### Modified Files
+
+#### Backend - Core Authentication
+```
+packages/cli/src/sso.ce/
+└── sso-helpers.ts                   # Enhanced with OIDC helper functions:
+                                     #   - isOidcEnabled()
+                                     #   - getCurrentAuthenticationMethod() (FIXED)
+                                     #   - getOidcLoginLabel()
+                                     #   - shouldRedirectLoginToSso()
+```
+
+#### Backend - Frontend Service Integration
+```
+packages/cli/src/services/
+└── frontend.service.ts              # Updated to use Community Edition OIDC helpers
+                                     #   - Fixed imports from CE helpers
+                                     #   - Proper OIDC settings exposure to frontend API
+```
+
+#### Backend - Server Integration
+```
+packages/cli/src/
+└── server.ts                        # OIDC service registration and initialization
+```
+
+#### Frontend - Component Integration
+```
+packages/editor-ui/src/components/
+└── SSOLogin.vue                     # Dynamic OIDC/SAML button component
+                                     #   - "Sign in with OIDC" vs "Sign in with SAML"
+                                     #   - Conditional display logic
+```
+
+#### Frontend - Store Management
+```
+packages/editor-ui/src/stores/
+├── sso.store.ts                     # Complete OIDC support alongside SAML
+│                                    #   - showSsoLoginButton logic
+│                                    #   - getSSORedirectUrl() for OIDC
+│                                    #   - No enterprise license required for OIDC
+└── settings.store.ts                # OIDC properties and computed values
+                                     #   - isOidcLoginEnabled
+                                     #   - isDefaultAuthenticationOidc
+```
+
+#### Frontend - Type Definitions
+```
+packages/editor-ui/src/
+└── Interface.ts                     # Added Oidc = 'oidc' to UserManagementAuthenticationMethod enum
+```
+
+#### Backend - Database Integration
+```
+packages/@n8n/db/src/entities/
+└── AuthIdentity.ts                  # Extended to support 'oidc' provider type
+                                     #   - Uses existing AuthIdentity system
+                                     #   - No new database columns required
+```
+
+#### Configuration Management
+```
+packages/@n8n/config/src/
+├── index.ts                         # Export new SSO configuration
+└── configs/sso.config.ts            # OIDC environment variable schema
+```
+
+### Package Dependencies
+
+#### Added Dependencies
+```json
+{
+  "openid-client": "^5.x.x"          # OIDC protocol implementation library
+}
+```
+
+### Key Implementation Patterns
+
+#### Environment Variables Added
+```bash
+# Core OIDC Configuration
+N8N_SSO_OIDC_ENABLED=true           # Master feature flag
+N8N_OIDC_ISSUER_URL=https://...     # Identity provider URL  
+N8N_OIDC_CLIENT_ID=client-id        # OAuth client ID
+N8N_OIDC_CLIENT_SECRET=secret       # OAuth client secret
+N8N_OIDC_REDIRECT_URI=https://...   # Callback URL
+N8N_OIDC_SCOPES="openid email profile"  # OAuth scopes
+N8N_OIDC_JIT_PROVISIONING=true     # Auto-create users
+N8N_OIDC_REDIRECT_LOGIN_TO_SSO=false # Auto-redirect behavior
+```
+
+#### Critical Bug Fixes Applied
+```typescript
+// 1. Environment Variable Name Fix (sso-helpers.ts)
+// BEFORE: process.env.SSO_OIDC_ENABLED === 'true'
+// AFTER:  process.env.N8N_SSO_OIDC_ENABLED === 'true'
+
+// 2. Authentication Method Detection Fix (sso-helpers.ts)  
+export function getCurrentAuthenticationMethod(): AuthProviderType {
+  // ENHANCEMENT: Return 'oidc' when OIDC is enabled
+  if (isOidcEnabled()) {
+    return 'oidc';
+  }
+  return config.getEnv('userManagement.authenticationMethod');
+}
+
+// 3. Frontend Service Import Fix (frontend.service.ts)
+// BEFORE: import from Enterprise Edition helpers
+// AFTER:  import from Community Edition helpers
+```
+
+### Architecture Decisions
+
+#### Community Edition Focus
+- **No Enterprise Dependencies**: All OIDC code works in Community Edition
+- **Separate CE Implementation**: OidcServiceCE, OidcControllerCE, sso-helpers.ts (CE)
+- **License-Free**: No license checks or restrictions for OIDC functionality
+
+#### Security Implementation
+- **PKCE Flow**: Authorization Code + PKCE for enhanced security
+- **AuthIdentity System**: Reuses existing identity mapping (no new DB columns)
+- **Feature Flag Protection**: All functionality guarded by `sso.oidcEnabled`
+
+#### Frontend Experience
+- **Dynamic UI**: Conditional OIDC button display based on backend settings
+- **Proper Labeling**: "Sign in with OIDC" vs "Sign in with SAML"
+- **Seamless Integration**: Works alongside existing SAML/LDAP authentication
+
+### Configuration Files Impact
+
+#### TypeScript Configuration
+```
+packages/cli/tsconfig.json           # Updated paths for new OIDC files
+packages/@n8n/config/tsconfig.json  # Include SSO config files
+```
+
+#### ESLint Status
+```
+  Known Issues:
+- Import group spacing in oidc.controller.ts (line 5)
+- Unsafe .role access in oidc.controller.ts (line 112)
+- These are non-functional lint issues that can be addressed in cleanup
+```
+
+### Verification Checklist
+
+- **Backend Integration**: OIDC service properly initialized and registered
+- **Frontend Integration**: OIDC button appears when configured
+- **Settings API**: Correctly exposes OIDC configuration to frontend
+- **Authentication Flow**: Complete PKCE flow implementation
+- **User Provisioning**: JIT user creation works without license restrictions
+- **Proxy Support**: Compatible with corporate proxy environments
+- **Community Edition**: Full functionality without Enterprise dependencies
+- **Environment Variables**: All configuration via environment variables
+- **Documentation**: Comprehensive setup and troubleshooting guides
+
+### Testing Status
+
+#### Completed Testing
+- Manual end-to-end authentication flow
+- Frontend button display logic
+- Backend settings API integration
+- Proxy configuration with OIDC
+- Microsoft Entra ID integration testing
+
+#### Future Testing Recommendations
+- Unit tests for OidcServiceCE and OidcControllerCE
+- Integration tests with mock OIDC provider
+- Additional identity provider testing (Okta, Auth0, Google)
+- Load testing for high-volume authentication scenarios

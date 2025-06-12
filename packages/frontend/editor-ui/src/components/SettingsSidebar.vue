@@ -2,6 +2,7 @@
 import { computed } from 'vue';
 import { ABOUT_MODAL_KEY, VIEWS } from '@/constants';
 import { useUserHelpers } from '@/composables/useUserHelpers';
+import { useOidcHelpers } from '@/composables/useOidcHelpers';
 import type { IMenuItem } from '@n8n/design-system';
 import { useUIStore } from '@/stores/ui.store';
 import { useSettingsStore } from '@/stores/settings.store';
@@ -19,6 +20,7 @@ const route = useRoute();
 const i18n = useI18n();
 
 const { canUserAccessRouteByName } = useUserHelpers(router, route);
+const { canAccessPersonalSettings } = useOidcHelpers();
 
 const rootStore = useRootStore();
 const settingsStore = useSettingsStore();
@@ -39,7 +41,8 @@ const sidebarMenuItems = computed<IMenuItem[]>(() => {
 			icon: 'circle-user-round',
 			label: i18n.baseText('settings.personal'),
 			position: 'top',
-			available: canUserAccessRouteByName(VIEWS.PERSONAL_SETTINGS),
+			available:
+				canUserAccessRouteByName(VIEWS.PERSONAL_SETTINGS) && canAccessPersonalSettings.value,
 			route: { to: { name: VIEWS.PERSONAL_SETTINGS } },
 		},
 		{
