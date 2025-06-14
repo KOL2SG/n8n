@@ -27,6 +27,7 @@ import {
 	getCurrentAuthenticationMethod,
 	isOidcEnabled,
 	getOidcLoginLabel,
+	shouldRedirectLoginToSso,
 } from '@/sso.ce/sso-helpers';
 import { getSamlLoginLabel } from '@/sso.ee/saml/saml-helpers';
 import { UserManagementMailer } from '@/user-management/email';
@@ -394,6 +395,7 @@ export class FrontendService {
 			Object.assign(this.settings.sso.oidc, {
 				loginLabel: getOidcLoginLabel(),
 				loginEnabled: true,
+				redirectLoginToSso: shouldRedirectLoginToSso(),
 			});
 		}
 

@@ -100,6 +100,7 @@ export interface FrontendSettings {
 		oidc: {
 			loginLabel: string;
 			loginEnabled: boolean;
+			redirectLoginToSso: boolean;
 		};
 	};
 	publicApi: {

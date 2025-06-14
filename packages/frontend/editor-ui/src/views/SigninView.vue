@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, reactive, ref } from 'vue';
+import { computed, onMounted, reactive, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 
 import AuthView from './AuthView.vue';
@@ -21,7 +21,6 @@ export type EmailOrLdapLoginIdAndPassword = Pick<
 	LoginRequestDto,
 	'emailOrLdapLoginId' | 'password'
 >;
-
 export type MfaCodeOrMfaRecoveryCode = Pick<LoginRequestDto, 'mfaCode' | 'mfaRecoveryCode'>;
 
 const usersStore = useUsersStore();
@@ -124,6 +123,11 @@ const getRedirectQueryParameter = () => {
 	return redirect;
 };
 
+const isRedirectSafe = () => {
+	const redirect = getRedirectQueryParameter();
+	return redirect.startsWith('/') || redirect.startsWith(window.location.origin);
+};
+
 const login = async (form: LoginRequestDto) => {
 	try {
 		loading.value = true;
@@ -148,11 +152,11 @@ const login = async (form: LoginRequestDto) => {
 		}
 
 		telemetry.track('User attempted to login', {
-			result: showMfaView.value ? 'mfa_success' : 'success',
+			result: 'success',
 		});
 
-		if (isRedirectSafe()) {
-			const redirect = getRedirectQueryParameter();
+		const redirect = getRedirectQueryParameter();
+		if (redirect && isRedirectSafe()) {
 			if (redirect.startsWith('http')) {
 				window.location.href = redirect;
 				return;
@@ -184,6 +188,19 @@ const login = async (form: LoginRequestDto) => {
 	}
 };
 
+const onEmailPasswordSubmitted = async (form: EmailOrLdapLoginIdAndPassword) => {
+	await login(form);
+};
+
+const onMFASubmitted = async (form: MfaCodeOrMfaRecoveryCode) => {
+	await login({
+		emailOrLdapLoginId: emailOrLdapLoginId.value,
+		password: password.value,
+		mfaCode: form.mfaCode,
+		mfaRecoveryCode: form.mfaRecoveryCode,
+	});
+};
+
 const onBackClick = (fromForm: string) => {
 	reportError.value = false;
 	if (fromForm === MFA_FORM.MFA_TOKEN) {
@@ -191,15 +208,33 @@ const onBackClick = (fromForm: string) => {
 		loading.value = false;
 	}
 };
+
 const onFormChanged = (toForm: string) => {
 	if (toForm === MFA_FORM.MFA_RECOVERY_CODE) {
 		reportError.value = false;
 	}
 };
+
 const cacheCredentials = (form: EmailOrLdapLoginIdAndPassword) => {
 	emailOrLdapLoginId.value = form.emailOrLdapLoginId;
 	password.value = form.password;
 };
+
+// OIDC Auto-redirect Logic
+onMounted(async () => {
+	// Check if OIDC auto-redirect is enabled
+	// The backend shouldRedirectLoginToSso() already handles all conditions
+	if (settingsStore.isOidcAutoRedirectEnabled) {
+		try {
+			// Immediately redirect to OIDC provider without showing login form
+			window.location.href = await ssoStore.getSSORedirectUrl();
+		} catch (error) {
+			console.error('OIDC auto-redirect failed:', error);
+			toast.showError(error, 'SSO Redirect Error', 'Failed to redirect to OIDC provider');
+			// Fall back to showing login form if redirect fails
+		}
+	}
+});
 </script>
 
 <template>
