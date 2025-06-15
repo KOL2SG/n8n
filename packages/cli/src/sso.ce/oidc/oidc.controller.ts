@@ -1,10 +1,13 @@
-import { Container } from '@n8n/di';
 import { Get, RestController } from '@n8n/decorators';
+import { Container } from '@n8n/di';
 import { Response } from 'express';
-import type { AuthenticatedRequest } from '@/requests';
-import { OidcServiceCE } from './oidc.service';
+
 import { Logger } from 'n8n-core';
 import { AuthService } from '@/auth/auth.service';
+
+import type { AuthenticatedRequest } from '@/requests';
+
+import { OidcServiceCE } from './oidc.service';
 
 /**
  * Controller for OIDC authentication (Community Edition)
@@ -27,8 +30,10 @@ export class OidcControllerCE {
 			// Log config info for debugging
 			const config = this.oidcService.getConfigPreferences();
 			// Log each configuration item separately to avoid type errors
-			this.logger.debug('OIDC Configuration - Issuer URL:', { issuerUrl: config.issuerUrl });
-			this.logger.debug('OIDC Configuration - Redirect URI:', { redirectUri: config.redirectUri });
+			this.logger.debug('OIDC Configuration - Issuer URL:', { issuerUrlSet: !!config.issuerUrl });
+			this.logger.debug('OIDC Configuration - Redirect URI:', {
+				redirectUriSet: !!config.redirectUri,
+			});
 
 			// Handle scopes separately to avoid type errors
 			const scopesString = Array.isArray(config.scopes)

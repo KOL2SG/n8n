@@ -44,7 +44,7 @@ export const useSettingsStore = defineStore(STORES.SETTINGS, () => {
 	});
 	const ldap = ref({ loginLabel: '', loginEnabled: false });
 	const saml = ref({ loginLabel: '', loginEnabled: false });
-	const oidc = ref({ loginLabel: '', loginEnabled: false, redirectLoginToSso: false });
+	const oidc = ref({ loginLabel: '', loginEnabled: false });
 	const mfa = ref({ enabled: false });
 	const folders = ref({ enabled: false });
 
@@ -98,8 +98,6 @@ export const useSettingsStore = defineStore(STORES.SETTINGS, () => {
 	const isOidcLoginEnabled = computed(() => oidc.value.loginEnabled);
 
 	const oidcLoginLabel = computed(() => oidc.value.loginLabel);
-
-	const isOidcAutoRedirectEnabled = computed(() => oidc.value.redirectLoginToSso);
 
 	const isAiAssistantEnabled = computed(() => settings.value.aiAssistant?.enabled);
 
@@ -226,7 +224,6 @@ export const useSettingsStore = defineStore(STORES.SETTINGS, () => {
 		if (settings.value.sso?.oidc) {
 			oidc.value.loginEnabled = settings.value.sso.oidc.loginEnabled;
 			oidc.value.loginLabel = settings.value.sso.oidc.loginLabel;
-			oidc.value.redirectLoginToSso = settings.value.sso.oidc.redirectLoginToSso;
 		}
 
 		mfa.value.enabled = settings.value.mfa?.enabled;
@@ -400,7 +397,6 @@ export const useSettingsStore = defineStore(STORES.SETTINGS, () => {
 		isSamlLoginEnabled,
 		isOidcLoginEnabled,
 		oidcLoginLabel,
-		isOidcAutoRedirectEnabled,
 		showSetupPage,
 		deploymentType,
 		isCloudDeployment,

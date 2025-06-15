@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from 'vue';
+import { computed, reactive, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 
 import AuthView from './AuthView.vue';
@@ -219,22 +219,6 @@ const cacheCredentials = (form: EmailOrLdapLoginIdAndPassword) => {
 	emailOrLdapLoginId.value = form.emailOrLdapLoginId;
 	password.value = form.password;
 };
-
-// OIDC Auto-redirect Logic
-onMounted(async () => {
-	// Check if OIDC auto-redirect is enabled
-	// The backend shouldRedirectLoginToSso() already handles all conditions
-	if (settingsStore.isOidcAutoRedirectEnabled) {
-		try {
-			// Immediately redirect to OIDC provider without showing login form
-			window.location.href = await ssoStore.getSSORedirectUrl();
-		} catch (error) {
-			console.error('OIDC auto-redirect failed:', error);
-			toast.showError(error, 'SSO Redirect Error', 'Failed to redirect to OIDC provider');
-			// Fall back to showing login form if redirect fails
-		}
-	}
-});
 </script>
 
 <template>
