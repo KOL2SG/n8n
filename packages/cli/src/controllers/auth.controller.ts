@@ -20,16 +20,13 @@ import { PostHogClient } from '@/posthog';
 import { AuthlessRequest } from '@/requests';
 import { UserService } from '@/services/user.service';
 import { UrlService } from '@/services/url.service';
-import { getOidcEnabled } from '@/sso.ce/utils/config-helper';
+import { getOidcEnabled, getOidcRedirectLoginToSso } from '@/sso.ce/utils/config-helper';
 import {
 	getCurrentAuthenticationMethod,
 	isLdapCurrentAuthenticationMethod,
 	isSamlCurrentAuthenticationMethod,
 } from '@/sso.ee/sso-helpers';
-import {
-	isOidcCurrentAuthenticationMethod,
-	doRedirectUsersFromLoginToSsoFlow,
-} from '@/sso.ce/sso-helpers';
+import { isOidcCurrentAuthenticationMethod } from '@/sso.ce/sso-helpers';
 import config from '@/config';
 
 @RestController()
@@ -55,7 +52,7 @@ export class AuthController {
 	): Promise<PublicUser | undefined> {
 		// Check if OIDC is enabled and if redirection to SSO is enabled
 		const oidcEnabled = getOidcEnabled();
-		if (oidcEnabled && isOidcCurrentAuthenticationMethod() && doRedirectUsersFromLoginToSsoFlow()) {
+		if (oidcEnabled && isOidcCurrentAuthenticationMethod() && getOidcRedirectLoginToSso()) {
 			this.logger.debug('Redirecting to OIDC login flow');
 			res.redirect(`${this.urlService.getInstanceBaseUrl()}/rest/sso/oidc/login`);
 			return;

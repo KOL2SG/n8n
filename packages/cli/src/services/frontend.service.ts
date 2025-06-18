@@ -180,9 +180,9 @@ export class FrontendService {
 					loginLabel: '',
 				},
 				oidc: {
-					loginEnabled: false,
-					loginUrl: `${instanceBaseUrl}/${restEndpoint}/sso/oidc/login`,
-					callbackUrl: `${instanceBaseUrl}/${restEndpoint}/sso/oidc/callback`,
+					loginEnabled: isOidcEnabled(), // Use isOidcEnabled() function which already checks the env variable
+					loginLabel: getOidcLoginLabel(),
+					redirectLoginToSso: shouldRedirectLoginToSso(),
 				},
 			},
 			publicApi: {

@@ -13,13 +13,15 @@ export function isOidcEnabled(): boolean {
 }
 
 export function getCurrentAuthenticationMethod(): AuthProviderType {
-	// Only return 'oidc' as the current authentication method if OIDC auto-redirect is enabled
-	// This means OIDC is the ONLY authentication method allowed (SSO-only mode)
-	if (isOidcEnabled() && config.getEnv('sso.redirectLoginToSso')) {
+	const oidcEnabled = isOidcEnabled();
+
+	// If OIDC is enabled, it's an available authentication method regardless of auto-redirect setting
+	// The auto-redirect setting only controls UI behavior, not authentication capability
+	if (oidcEnabled) {
 		return 'oidc';
 	}
+
 	// Otherwise, return the configured authentication method (email, ldap, etc.)
-	// This allows mixed authentication: both OIDC button AND username/password
 	return config.getEnv('userManagement.authenticationMethod');
 }
 

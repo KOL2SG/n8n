@@ -64,10 +64,11 @@ export class OidcServiceCE {
 		const clientSecret = process.env.N8N_OIDC_CLIENT_SECRET || getOidcClientSecret();
 		const redirectUri = process.env.N8N_OIDC_REDIRECT_URL || getOidcRedirectUri();
 
-		if (!issuerUrl || !clientId) {
-			this.logger.debug('OIDC not configured; issuerUrl or clientId missing', {
-				issuerUrl,
-				clientId,
+		if (!issuerUrl || !clientId || !redirectUri) {
+			this.logger.debug('OIDC not configured; required parameters missing', {
+				issuerUrlSet: !!issuerUrl,
+				clientIdSet: !!clientId,
+				redirectUriSet: !!redirectUri,
 			});
 			return;
 		}
@@ -206,7 +207,8 @@ export class OidcServiceCE {
 									}
 								} catch (error) {
 									this.logger.warn('Failed to fetch userinfo', {
-										error: error instanceof Error ? error.message : String(error),
+										error:
+											error instanceof Error ? 'Error: ' + error.constructor.name : 'Unknown error',
 									});
 								}
 							}
@@ -214,8 +216,8 @@ export class OidcServiceCE {
 							return tokens;
 						} catch (error) {
 							this.logger.error('Token exchange failed', {
-								error: error instanceof Error ? error.message : String(error),
-								stack: error instanceof Error ? error.stack : undefined,
+								error:
+									error instanceof Error ? 'Error: ' + error.constructor.name : 'Unknown error',
 							});
 							throw error;
 						}
@@ -225,8 +227,11 @@ export class OidcServiceCE {
 				this.logger.debug('OIDC client initialized successfully using official pattern');
 			} catch (discoveryError) {
 				this.logger.error('OIDC discovery error', {
-					issuerUrl,
-					error: discoveryError instanceof Error ? discoveryError.message : String(discoveryError),
+					issuerUrlSet: !!issuerUrl,
+					error:
+						discoveryError instanceof Error
+							? 'Error: ' + discoveryError.constructor.name
+							: 'Unknown error',
 				});
 				throw discoveryError;
 			}
@@ -266,7 +271,10 @@ export class OidcServiceCE {
 				.map((part: string) => part.trim());
 			firstName = firstNamePart || '';
 			lastName = lastNamePart || '';
-			this.logger.debug('Extracted name using comma format', { firstName, lastName });
+			this.logger.debug('Extracted name using comma format', {
+				firstNameSet: !!firstName,
+				lastNameSet: !!lastName,
+			});
 		}
 		// Special case for Bosch format: "Goetzinger Philipp (BD/WPA-PWS3)"
 		// This format appears to put LastName FirstName (Department)
@@ -287,7 +295,11 @@ export class OidcServiceCE {
 				// For Bosch format, we'll swap the first two parts to get FirstName LastName
 				firstName = nameParts[1] || ''; // Second part is first name
 				lastName = nameParts[0] || ''; // First part is last name
-				this.logger.debug('Extracted name using Bosch format', { firstName, lastName, department });
+				this.logger.debug('Extracted name using Bosch format', {
+					firstNameSet: !!firstName,
+					lastNameSet: !!lastName,
+					departmentSet: !!department,
+				});
 			} else {
 				// Fall back to standard parsing
 				firstName = nameParts[0] || '';
@@ -298,14 +310,20 @@ export class OidcServiceCE {
 		else if (claims.given_name || claims.family_name) {
 			firstName = claims.given_name || '';
 			lastName = claims.family_name || '';
-			this.logger.debug('Extracted name using standard claims', { firstName, lastName });
+			this.logger.debug('Extracted name using standard claims', {
+				firstNameSet: !!firstName,
+				lastNameSet: !!lastName,
+			});
 		}
 		// Fall back to splitting the name field if available
 		else if (claims.name) {
 			const nameParts = (claims.name as string).split(' ');
 			firstName = nameParts[0] || '';
 			lastName = nameParts.slice(1).join(' ') || '';
-			this.logger.debug('Extracted name by splitting on spaces', { firstName, lastName });
+			this.logger.debug('Extracted name by splitting on spaces', {
+				firstNameSet: !!firstName,
+				lastNameSet: !!lastName,
+			});
 		}
 
 		return { firstName, lastName };
@@ -394,11 +412,20 @@ export class OidcServiceCE {
 	}
 
 	getConfigPreferences(): OidcPreferences {
+		// Debug logging to track down the redirect URI issue
+		const redirectUri = getOidcRedirectUri();
+		this.logger.debug('OIDC getConfigPreferences debug', {
+			envVarDirect: process.env.N8N_OIDC_REDIRECT_URL,
+			helperFunction: redirectUri,
+			envVarSet: !!process.env.N8N_OIDC_REDIRECT_URL,
+			helperSet: !!redirectUri,
+		});
+
 		return {
 			issuerUrl: getOidcIssuerUrl(),
 			clientId: getOidcClientId(),
 			clientSecret: getOidcClientSecret(),
-			redirectUri: getOidcRedirectUri(),
+			redirectUri: redirectUri,
 			scopes: getOidcScopes(),
 			jitProvisioning: getOidcJitProvisioning(),
 			redirectLoginToSso: getOidcRedirectLoginToSso(),
@@ -475,7 +502,9 @@ export class OidcServiceCE {
 
 			// IMPORTANT: We must use the exact same redirect URI that was registered with
 			// the identity provider during the token exchange, or it will be rejected
-			this.logger.debug('Using original redirect URI for token exchange', { redirectUri });
+			this.logger.debug('Using original redirect URI for token exchange', {
+				redirectUriSet: !!redirectUri,
+			});
 
 			const tokenSet = await this.oidcClient.callback(redirectUri, callbackParams, {
 				code_verifier: this.pkceVerifier!,
@@ -497,12 +526,10 @@ export class OidcServiceCE {
 
 			return tokenSet;
 		} catch (error) {
-			this.logger.error(
-				`OIDC callback error: ${error instanceof Error ? error.message : String(error)}`,
-				{
-					stack: error instanceof Error ? error.stack : undefined,
-				},
-			);
+			this.logger.error('OIDC callback error', {
+				error: error instanceof Error ? 'Error: ' + error.constructor.name : 'Unknown error',
+				stackAvailable: error instanceof Error && !!error.stack,
+			});
 			throw new BadRequestError('OIDC callback failed');
 		}
 	}
