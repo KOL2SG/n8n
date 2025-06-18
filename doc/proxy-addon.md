@@ -109,6 +109,9 @@ N8N_OIDC_ISSUER_URL=https://your-identity-provider.com
 N8N_OIDC_CLIENT_ID=your-client-id
 N8N_OIDC_CLIENT_SECRET=your-client-secret
 N8N_OIDC_REDIRECT_URI=https://your-n8n-host/rest/sso/oidc/callback
+
+# Optional: Enable automatic redirect to OIDC when users visit root URL
+N8N_OIDC_REDIRECT_LOGIN_TO_SSO=true
 ```
 
 ### Critical Startup Command for OIDC + Proxy
@@ -139,6 +142,7 @@ services:
       - N8N_OIDC_CLIENT_ID=${OIDC_CLIENT_ID}
       - N8N_OIDC_CLIENT_SECRET=${OIDC_CLIENT_SECRET}
       - N8N_OIDC_REDIRECT_URI=https://your-n8n-host/rest/sso/oidc/callback
+      - N8N_OIDC_REDIRECT_LOGIN_TO_SSO=true  # Optional: Auto-redirect to OIDC
     
     # REQUIRED: Load both proxy bootstraps for OIDC
     command: node -r ./packages/cli/build/bootstrap-proxy.js -r ./packages/cli/build/bootstrap-undici-proxy.js n8n
