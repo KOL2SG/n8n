@@ -55,6 +55,7 @@ import '@/controllers/users.controller';
 import '@/sso.ce/sso.config';
 import { getOidcEnabled } from '@/sso.ce/utils/config-helper';
 import { initializeOidcService } from '@/sso.ce/oidc/init';
+import { isOidcEnabled, shouldRedirectLoginToSso } from '@/sso.ce/sso-helpers';
 import '@/controllers/user-settings.controller';
 import '@/controllers/workflow-statistics.controller';
 import '@/controllers/api-keys.controller';

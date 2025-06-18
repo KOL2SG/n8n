@@ -2,7 +2,6 @@ import { SettingsRepository, type AuthProviderType } from '@n8n/db';
 import { Container } from '@n8n/di';
 
 import config from '@/config';
-import { getOidcRedirectLoginToSso } from './utils/config-helper';
 
 /**
  * Helper functions for SSO (Community edition)
@@ -65,5 +64,5 @@ export function getOidcLoginLabel(): string {
 }
 
 export function shouldRedirectLoginToSso(): boolean {
-	return isOidcEnabled() && getOidcRedirectLoginToSso();
+	return isOidcEnabled() && process.env.N8N_OIDC_REDIRECT_LOGIN_TO_SSO === 'true';
 }

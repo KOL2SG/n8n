@@ -27,6 +27,7 @@ export async function initializeOidcService(_app: Application): Promise<void> {
 			N8N_OIDC_CLIENT_SECRET: process.env.N8N_OIDC_CLIENT_SECRET ? '***redacted***' : 'not set',
 			N8N_OIDC_REDIRECT_URL: process.env.N8N_OIDC_REDIRECT_URL || 'not set',
 			N8N_OIDC_SCOPES: process.env.N8N_OIDC_SCOPES || 'not set',
+			N8N_OIDC_REDIRECT_LOGIN_TO_SSO: process.env.N8N_OIDC_REDIRECT_LOGIN_TO_SSO || 'not set',
 		});
 
 		// Check if OIDC is enabled via feature flag

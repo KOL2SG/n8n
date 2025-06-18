@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, reactive, ref } from 'vue';
+import { computed, onMounted, reactive, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 
 import AuthView from './AuthView.vue';
@@ -219,6 +219,32 @@ const cacheCredentials = (form: EmailOrLdapLoginIdAndPassword) => {
 	emailOrLdapLoginId.value = form.emailOrLdapLoginId;
 	password.value = form.password;
 };
+
+// OIDC auto-redirect logic
+onMounted(() => {
+	// Check if OIDC auto-redirect is enabled
+	const isOidcEnabled = settingsStore.settings.sso?.oidc?.loginEnabled;
+	const shouldRedirect = settingsStore.settings.sso?.oidc?.redirectLoginToSso;
+	const currentRedirect = route.query.redirect as string;
+
+	// Only auto-redirect if:
+	// 1. OIDC is enabled and auto-redirect is enabled
+	// 2. User is coming from root path (redirect parameter is "/" or "%2F")
+	if (isOidcEnabled && shouldRedirect && currentRedirect) {
+		const decodedRedirect = decodeURIComponent(currentRedirect);
+
+		// Check if redirect parameter indicates user came from root path
+		if (decodedRedirect === '/' || decodedRedirect === '%2F') {
+			let redirectUrl = '/rest/sso/oidc/login';
+
+			// Preserve the redirect parameter for the OIDC flow
+			redirectUrl += `?redirect=${encodeURIComponent(currentRedirect)}`;
+
+			// Redirect to OIDC login
+			window.location.href = redirectUrl;
+		}
+	}
+});
 </script>
 
 <template>
