@@ -182,6 +182,9 @@ export const getOAuth2AdditionalParameters = (nodeCredentialType: string) => {
 		microsoftDynamicsOAuth2Api: {
 			property: 'id_token',
 		},
+		microsoftSharePointOAuth2Api: {
+			includeCredentialsOnRefreshOnBody: true,
+		},
 		philipsHueOAuth2Api: {
 			tokenType: 'Bearer',
 		},
