@@ -65,7 +65,8 @@ import { Readable } from 'stream';
 import url, { URL, URLSearchParams } from 'url';
 
 import type { IResponseError } from '@/interfaces';
-import { Logger } from '@/logging/logger';
+
+import { Logger } from '@n8n/backend-common';
 
 import { binaryToString } from './binary-helper-functions';
 import { parseIncomingMessage } from './parse-incoming-message';
