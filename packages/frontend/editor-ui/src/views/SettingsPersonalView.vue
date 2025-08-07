@@ -78,13 +78,17 @@ const isExternalAuthEnabled = computed((): boolean => {
 		ssoStore.isEnterpriseOidcEnabled && currentUser.value?.signInType === 'oidc';
 	return isLdapEnabled || isSamlEnabled || isOidcEnabled;
 });
-
+const hasOidcIdentity = computed((): boolean => {
+	// Check if user has OIDC identity by looking at authIdentities
+	return (
+		currentUser.value?.authIdentities?.some((identity) => identity.providerType === 'oidc') ?? false
+	);
+});
 const isPersonalSecurityEnabled = computed((): boolean => {
-	// IMPORTANT: OIDC users should NEVER see security settings, regardless of other permissions
+	// Disable password change for OIDC users
 	if (hasOidcIdentity.value) {
 		return false;
 	}
-	// For non-OIDC users, apply normal rules
 	return usersStore.isInstanceOwner || !isExternalAuthEnabled.value;
 });
 

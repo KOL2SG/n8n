@@ -15,6 +15,7 @@ import {
 } from '../utils/config-helper';
 import type { User } from '@n8n/db';
 import type { DeepPartial } from '@n8n/typeorm';
+import * as crypto from 'crypto';
 
 @Service()
 export class OidcServiceCE {
@@ -466,78 +467,61 @@ export class OidcServiceCE {
 			throw new BadRequestError('Invalid token - missing subject claim');
 		}
 
-		// 1. Try existing OIDC identity
+		// 1. Try to find user by OIDC subject (most reliable method)
 		const identity = await this.authIdentityRepository.findOne({
-			where: { providerType: 'oidc', providerId: subject },
-			relations: ['user', 'user.authIdentities'],
+			where: { providerId: subject, providerType: 'oidc' },
+			relations: ['user'],
 		});
-		if (identity) {
-			// Ensure the user is activated when they log in via SSO
-			const user = identity.user;
-			if (!user.settings?.userActivated) {
-				this.logger.debug('Activating existing user logging in via OIDC', {
-					userId: user.id,
-					email: user.email,
-				});
 
-				// Initialize settings if not present
-				if (!user.settings) {
-					user.settings = {};
-				}
-
-				// Set user as activated
-				user.settings.userActivated = true;
-				await this.userRepository.save(user);
-			}
-			return { user: identity.user, isNew: false };
+		if (identity?.user) {
+			// Update user information from OIDC claims
+			const updatedUser = await this.updateUserFromClaims(identity.user, claims);
+			return { user: updatedUser, isNew: false };
 		}
 
-		// 2. Fallback: find user by email claim
-		const email = claims.email as string;
-		if (email) {
+		// 2. Try email-based user lookup as fallback
+		if (claims.email) {
+			// Try to find user by email as a fallback
 			const user = await this.userRepository.findOne({
-				where: { email },
-				relations: ['authIdentities'],
+				where: { email: claims.email },
 			});
+
 			if (user) {
-				// Ensure the user is activated when they log in via SSO
-				if (!user.settings?.userActivated) {
-					this.logger.debug('Activating existing user matched by email through OIDC', {
-						userId: user.id,
-						email: user.email,
-					});
+				this.logger.debug('Found existing user by email, creating OIDC identity', {
+					email: claims.email,
+					userId: user.id,
+				});
 
-					// Initialize settings if not present
-					if (!user.settings) {
-						user.settings = {};
-					}
+				// Update user with OIDC claims data
+				const updatedUser = await this.updateUserFromClaims(user, claims);
 
-					// Set user as activated
-					user.settings.userActivated = true;
-					await this.userRepository.save(user);
-				}
-
-				const newIdentity = AuthIdentity.create(user, subject, 'oidc');
+				// Create auth identity to link user to OIDC
+				const newIdentity = AuthIdentity.create(updatedUser, subject, 'oidc');
 				await this.authIdentityRepository.save(newIdentity);
-				return { user, isNew: false };
+				return { user: updatedUser, isNew: false };
 			}
 		}
 
 		// 3. JIT provisioning
 		if (getOidcJitProvisioning()) {
 			this.logger.debug('Creating new user via OIDC JIT provisioning', {
-				email,
+				email: claims.email,
 				subject,
 				hasName: !!claims.name,
 			});
 
+			// Extract name from claims using the dedicated method
+			const { firstName, lastName } = this.extractNameFromClaims(claims);
+
 			// Prepare user data for creation
 			const userData: DeepPartial<User> = {
-				email: email || `${subject}@oidc.user`,
-				firstName: (claims.name as string)?.split(' ')[0] || '',
-				lastName: (claims.name as string)?.split(' ').slice(1).join(' ') || '',
+				email: claims.email || `${subject}@oidc.user`,
+				firstName,
+				lastName,
 				role: 'global:member',
 				settings: { userActivated: true },
+				// Add a random password to prevent user from being marked as "pending"
+				password: this.generateRandomPassword(),
 			};
 
 			// Use helper to also create the user's personal project + relation
