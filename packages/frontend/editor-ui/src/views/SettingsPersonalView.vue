@@ -96,6 +96,12 @@ const hasOidcIdentity = computed((): boolean => {
 	// Some API responses might not include authIdentities but will have signInType
 	return currentUser.value.signInType === 'oidc';
 });
+const hasOidcIdentity = computed((): boolean => {
+	// Check if user has OIDC identity by looking at authIdentities
+	return (
+		currentUser.value?.authIdentities?.some((identity) => identity.providerType === 'oidc') ?? false
+	);
+});
 const isPersonalSecurityEnabled = computed((): boolean => {
 	// Disable password change for OIDC users
 	if (hasOidcIdentity.value) {

@@ -247,83 +247,20 @@ export class OidcServiceCE {
 	/**
 	 * Extract first and last name from OIDC claims
 	 */
-	private extractNameFromClaims(claims: any): {
-		firstName: string;
-		lastName: string;
-		department?: string;
-	} {
+	private extractNameFromClaims(claims: any): { firstName: string; lastName: string } {
 		let firstName = '';
 		let lastName = '';
-		let department = '';
 
-		// Debug log to see exact structure of name fields
-		this.logger.debug('OIDC name claims received', {
-			name: claims.name,
-			givenName: claims.given_name,
-			familyName: claims.family_name,
-		});
-
-		// For Microsoft Entra ID (Azure AD), the name format is often "LastName, FirstName"
-		// Check if the name contains a comma which indicates this format
-		if (claims.name && claims.name.includes(',')) {
-			const [lastNamePart, firstNamePart] = claims.name
-				.split(',')
-				.map((part: string) => part.trim());
-			firstName = firstNamePart || '';
-			lastName = lastNamePart || '';
-			this.logger.debug('Extracted name using comma format', {
-				firstNameSet: !!firstName,
-				lastNameSet: !!lastName,
-			});
-		}
-		// Special case for Bosch format: "Goetzinger Philipp (BD/WPA-PWS3)"
-		// This format appears to put LastName FirstName (Department)
-		else if (claims.name && claims.name.includes('(') && !claims.name.startsWith('(')) {
-			// Extract department information from parentheses
-			const departmentMatch = claims.name.match(/\(([^)]+)\)/);
-			if (departmentMatch && departmentMatch[1]) {
-				department = departmentMatch[1];
-				this.logger.debug('Extracted department', { department });
-			}
-
-			// Extract name parts without the department
-			const nameWithoutDept = claims.name.replace(/\s*\([^)]*\)\s*/, '');
-			const nameParts = nameWithoutDept.split(' ');
-
-			// Check if we have at least two parts before any parenthesis
-			if (nameParts.length >= 2) {
-				// For Bosch format, we'll swap the first two parts to get FirstName LastName
-				firstName = nameParts[1] || ''; // Second part is first name
-				lastName = nameParts[0] || ''; // First part is last name
-				this.logger.debug('Extracted name using Bosch format', {
-					firstNameSet: !!firstName,
-					lastNameSet: !!lastName,
-					departmentSet: !!department,
-				});
-			} else {
-				// Fall back to standard parsing
-				firstName = nameParts[0] || '';
-				lastName = nameParts.slice(1).join(' ') || '';
-			}
-		}
-		// Then try to use given_name and family_name if available (standard claims)
-		else if (claims.given_name || claims.family_name) {
+		// First try to use given_name and family_name if available (most accurate)
+		if (claims.given_name || claims.family_name) {
 			firstName = claims.given_name || '';
 			lastName = claims.family_name || '';
-			this.logger.debug('Extracted name using standard claims', {
-				firstNameSet: !!firstName,
-				lastNameSet: !!lastName,
-			});
 		}
 		// Fall back to splitting the name field if available
 		else if (claims.name) {
 			const nameParts = (claims.name as string).split(' ');
 			firstName = nameParts[0] || '';
 			lastName = nameParts.slice(1).join(' ') || '';
-			this.logger.debug('Extracted name by splitting on spaces', {
-				firstNameSet: !!firstName,
-				lastNameSet: !!lastName,
-			});
 		}
 
 		return { firstName, lastName };
@@ -334,50 +271,17 @@ export class OidcServiceCE {
 	 */
 	private async updateUserFromClaims(user: User, claims: any): Promise<User> {
 		let isChanged = false;
-		const { firstName, lastName, department } = this.extractNameFromClaims(claims);
+		const { firstName, lastName } = this.extractNameFromClaims(claims);
 
-		// Always update name from OIDC on each login if values are provided
-		// This ensures the name in n8n stays in sync with the identity provider
-		if (firstName) {
-			const nameChanged = firstName !== user.firstName;
+		// Only update if SSO provides these values and they differ from what we have
+		if (firstName && firstName !== user.firstName) {
 			user.firstName = firstName;
-			if (nameChanged) {
-				isChanged = true;
-				this.logger.debug('Updated firstName from OIDC claims', {
-					userId: user.id,
-					old: user.firstName,
-					new: firstName,
-				});
-			}
+			isChanged = true;
 		}
 
-		if (lastName) {
-			// If we have a department, append it to the last name
-			const displayLastName = department ? `${lastName} (${department})` : lastName;
-			const nameChanged = displayLastName !== user.lastName;
-			user.lastName = displayLastName;
-			if (nameChanged) {
-				isChanged = true;
-				this.logger.debug('Updated lastName from OIDC claims', {
-					userId: user.id,
-					old: user.lastName,
-					new: displayLastName,
-					department,
-				});
-			}
-		}
-
-		// Ensure user has authIdentity record for OIDC
-		// This will help the frontend identify OIDC users
-		const hasOidcIdentity = user.authIdentities?.some(
-			(identity) => identity.providerType === 'oidc',
-		);
-		if (!hasOidcIdentity) {
-			// This is a passive check - we don't modify authIdentities here
-			// The AuthIdentity records are handled by the auth system
-			this.logger.debug('User does not have OIDC identity record yet', {
-				userId: user.id,
-			});
+		if (lastName && lastName !== user.lastName) {
+			user.lastName = lastName;
+			isChanged = true;
 		}
 
 		// Ensure user is not pending by setting a random password if null
