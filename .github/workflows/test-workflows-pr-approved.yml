@@ -6,7 +6,7 @@ on:
 
 permissions:
   contents: read
-<<<<<<< HEAD
+  pull-requests: read
 
 jobs:
   eligibility_check:
@@ -23,18 +23,6 @@ jobs:
     uses: ./.github/workflows/test-workflows-callable.yml
     with:
       git_ref: ${{ github.event.pull_request.head.sha }}
-    secrets: inherit
-=======
-  pull-requests: read
-
-jobs:
-  run_workflow_tests_after_approval:
-    name: Run Tests on Approved PR
-    if: github.event.review.state == 'approved'
-    uses: ./.github/workflows/test-workflows-callable.yml
-    with:
-      git_ref: ${{ github.event.pull_request.head.sha }}
       send_webhook_report: true
       pr_number: ${{ github.event.pull_request.number }}
     secrets: inherit
->>>>>>> 8f961efeb (Merge branch 'master' of https://github.com/n8n-io/n8n)

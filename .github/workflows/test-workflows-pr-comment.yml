@@ -107,9 +107,6 @@ jobs:
     uses: ./.github/workflows/test-workflows-callable.yml
     with:
       git_ref: ${{ needs.handle_comment_command.outputs.git_ref }}
-<<<<<<< HEAD
-=======
       send_webhook_report: true
       pr_number: ${{ needs.handle_comment_command.outputs.pr_number }}
->>>>>>> 8f961efeb (Merge branch 'master' of https://github.com/n8n-io/n8n)
     secrets: inherit

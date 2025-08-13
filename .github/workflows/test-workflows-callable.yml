@@ -1,8 +1,4 @@
-<<<<<<< HEAD
-name: Test Workflows - Reusable
-=======
 name: Callable Test Workflows
->>>>>>> 8f961efeb (Merge branch 'master' of https://github.com/n8n-io/n8n)
 
 on:
   workflow_call:
@@ -11,12 +7,21 @@ on:
         description: 'The Git ref (branch, tag, or SHA) to checkout and test.'
         required: true
         type: string
-<<<<<<< HEAD
       compare_schemas:
         description: 'Set to "true" to enable schema comparison during tests.'
         required: false
         default: 'true'
         type: string
+      send_webhook_report:
+        description: 'Set to true to send test results to the webhook.'
+        required: false
+        type: boolean
+        default: false
+      pr_number:
+        description: 'The PR number, if applicable (for context in webhook).'
+        required: false
+        type: string
+        default: ''
     secrets:
       ENCRYPTION_KEY:
         description: 'Encryption key for n8n operations.'
@@ -24,6 +29,15 @@ on:
       CURRENTS_RECORD_KEY:
         description: 'Currents record key for uploading test results.'
         required: true
+      N8N_ENCRYPTION_KEY:
+        description: 'Encryption key for n8n operations.'
+        required: true
+      CI_SENTRY_DSN:
+        description: 'Sentry DSN for CI test runs.'
+        required: false
+      RESULTS_WEBHOOK_URL:
+        description: 'Webhook URL to send test results to (if enabled).'
+        required: false
 
 env:
   NODE_OPTIONS: --max-old-space-size=3072
@@ -56,19 +70,6 @@ jobs:
         run: pnpm --filter=n8n-playwright test:workflows:schema
         env:
           CURRENTS_RECORD_KEY: ${{ secrets.CURRENTS_RECORD_KEY }}
-=======
-      send_webhook_report:
-        description: 'Set to true to send test results to the webhook.'
-        required: false
-        type: boolean
-        default: false
-      pr_number:
-        description: 'The PR number, if applicable (for context in webhook).'
-        required: false
-        type: string
-        default: ''
-    secrets:
-      N8N_ENCRYPTION_KEY:
         description: 'Encryption key for n8n operations.'
         required: true
       CI_SENTRY_DSN:
@@ -265,4 +266,3 @@ jobs:
           else
             echo "::error::Webhook call failed with status code $http_response_code."
           fi
->>>>>>> 8f961efeb (Merge branch 'master' of https://github.com/n8n-io/n8n)
