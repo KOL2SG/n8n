@@ -1,5 +1,5 @@
 import { Service } from '@n8n/di';
-import { Logger } from 'n8n-core';
+import { Logger } from '@n8n/backend-common';
 import { BadRequestError } from '@/errors/response-errors/bad-request.error';
 import { AuthService } from '@/auth/auth.service';
 import { SettingsRepository, UserRepository, AuthIdentity, AuthIdentityRepository } from '@n8n/db';

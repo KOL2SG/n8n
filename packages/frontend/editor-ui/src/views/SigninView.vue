@@ -123,11 +123,6 @@ const getRedirectQueryParameter = () => {
 	return redirect;
 };
 
-const isRedirectSafe = () => {
-	const redirect = getRedirectQueryParameter();
-	return redirect.startsWith('/') || redirect.startsWith(window.location.origin);
-};
-
 const login = async (form: LoginRequestDto) => {
 	try {
 		loading.value = true;
@@ -186,19 +181,6 @@ const login = async (form: LoginRequestDto) => {
 
 		reportError.value = true;
 	}
-};
-
-const onEmailPasswordSubmitted = async (form: EmailOrLdapLoginIdAndPassword) => {
-	await login(form);
-};
-
-const onMFASubmitted = async (form: MfaCodeOrMfaRecoveryCode) => {
-	await login({
-		emailOrLdapLoginId: emailOrLdapLoginId.value,
-		password: password.value,
-		mfaCode: form.mfaCode,
-		mfaRecoveryCode: form.mfaRecoveryCode,
-	});
 };
 
 const onBackClick = (fromForm: string) => {

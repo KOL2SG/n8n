@@ -1,4 +1,4 @@
-import type { IrreversibleMigration, MigrationContext } from '@/databases/types';
+import type { IrreversibleMigration, MigrationContext } from '../migration-types';
 
 /**
  * Fix SQLite compatibility issues with OIDC fields

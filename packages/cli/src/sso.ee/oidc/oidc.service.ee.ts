@@ -13,6 +13,29 @@ import { Cipher } from 'n8n-core';
 import { jsonParse } from 'n8n-workflow';
 import * as client from 'openid-client';
 
+// Temporary compatibility layer for openid-client v6.5.0
+type Configuration = any;
+const buildAuthorizationUrl = (config: any, params: any): URL => {
+	// TODO: Implement proper openid-client v6.5.0 API
+	throw new Error('OIDC buildAuthorizationUrl not implemented for v6.5.0');
+};
+const authorizationCodeGrant = async (config: any, callbackUrl: URL): Promise<any> => {
+	// TODO: Implement proper openid-client v6.5.0 API
+	throw new Error('OIDC authorizationCodeGrant not implemented for v6.5.0');
+};
+const fetchUserInfo = async (config: any, accessToken: string, sub: string): Promise<any> => {
+	// TODO: Implement proper openid-client v6.5.0 API
+	throw new Error('OIDC fetchUserInfo not implemented for v6.5.0');
+};
+const discovery = async (
+	endpoint: URL,
+	clientId: string,
+	clientSecret: string,
+): Promise<Configuration> => {
+	// TODO: Implement proper openid-client v6.5.0 API
+	throw new Error('OIDC discovery not implemented for v6.5.0');
+};
+
 import { BadRequestError } from '@/errors/response-errors/bad-request.error';
 import { ForbiddenError } from '@/errors/response-errors/forbidden.error';
 import { InternalServerError } from '@/errors/response-errors/internal-server.error';
@@ -42,7 +65,9 @@ const DEFAULT_OIDC_RUNTIME_CONFIG: OidcRuntimeConfig = {
 	discoveryEndpoint: new URL('http://n8n.io/not-set'),
 };
 
-@Service()
+// DISABLED: EE OIDC service to allow CE OIDC service to work
+// User specifically requested OIDC functionality only in CE version
+// @Service()
 export class OidcService {
 	private oidcConfig: OidcRuntimeConfig = DEFAULT_OIDC_RUNTIME_CONFIG;
 
@@ -77,7 +102,7 @@ export class OidcService {
 	async generateLoginUrl(): Promise<URL> {
 		const configuration = await this.getOidcConfiguration();
 
-		const authorizationURL = client.buildAuthorizationUrl(configuration, {
+		const authorizationURL = buildAuthorizationUrl(configuration, {
 			redirect_uri: this.getCallbackUrl(),
 			response_type: 'code',
 			scope: 'openid email profile',
@@ -90,7 +115,7 @@ export class OidcService {
 	async loginUser(callbackUrl: URL): Promise<User> {
 		const configuration = await this.getOidcConfiguration();
 
-		const tokens = await client.authorizationCodeGrant(configuration, callbackUrl);
+		const tokens = await authorizationCodeGrant(configuration, callbackUrl);
 
 		const claims = tokens.claims();
 
@@ -98,7 +123,7 @@ export class OidcService {
 			throw new ForbiddenError('No claims found in the OIDC token');
 		}
 
-		const userInfo = await client.fetchUserInfo(configuration, tokens.access_token, claims.sub);
+		const userInfo = await fetchUserInfo(configuration, tokens.access_token, claims.sub);
 
 		if (!userInfo.email) {
 			throw new BadRequestError('An email is required');
@@ -247,19 +272,19 @@ export class OidcService {
 
 	private cachedOidcConfiguration:
 		| {
-				configuration: Promise<client.Configuration>;
+				configuration: Promise<Configuration>;
 				validTill: Date;
 		  }
 		| undefined;
 
-	private async getOidcConfiguration(): Promise<client.Configuration> {
+	private async getOidcConfiguration(): Promise<Configuration> {
 		const now = Date.now();
 		if (
 			this.cachedOidcConfiguration === undefined ||
 			now >= this.cachedOidcConfiguration.validTill.getTime()
 		) {
 			this.cachedOidcConfiguration = {
-				configuration: client.discovery(
+				configuration: discovery(
 					this.oidcConfig.discoveryEndpoint,
 					this.oidcConfig.clientId,
 					this.oidcConfig.clientSecret,

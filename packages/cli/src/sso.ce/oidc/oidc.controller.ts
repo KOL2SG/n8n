@@ -2,7 +2,7 @@ import { Get, RestController } from '@n8n/decorators';
 import { Container } from '@n8n/di';
 import { Response } from 'express';
 
-import { Logger } from 'n8n-core';
+import { Logger } from '@n8n/backend-common';
 import { AuthService } from '@/auth/auth.service';
 
 import type { AuthenticatedRequest } from '@/requests';

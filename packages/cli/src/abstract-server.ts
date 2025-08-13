@@ -268,7 +268,9 @@ export abstract class AbstractServer {
 		// Setup body parsing middleware after the webhook handlers are setup
 		this.app.use(bodyParser);
 
+		this.logger.debug('ABSTRACT SERVER: About to call configure() method');
 		await this.configure();
+		this.logger.debug('ABSTRACT SERVER: Configure method completed');
 
 		if (!inTest) {
 			this.logger.info(`Version: ${N8N_VERSION}`);

@@ -20,8 +20,11 @@ export class ModuleRegistry {
 	) {}
 
 	async initializeModules() {
-		for (const ModuleClass of this.moduleMetadata.getModules()) {
-			await Container.get(ModuleClass).initialize?.();
+		for (const ModuleClass of this.moduleMetadata.getClasses()) {
+			const moduleInstance = Container.get(ModuleClass);
+			if ('initialize' in moduleInstance && typeof moduleInstance.initialize === 'function') {
+				await moduleInstance.initialize();
+			}
 		}
 	}
 

@@ -32,7 +32,7 @@ import { Telemetry } from '@/telemetry';
 import { WorkflowRunner } from '@/workflow-runner';
 
 import { EvaluationMetrics } from './evaluation-metrics.ee';
-import { JsonObject } from 'openid-client';
+type JsonObject = Record<string, any>;
 
 export interface TestRunMetadata {
 	testRunId: string;

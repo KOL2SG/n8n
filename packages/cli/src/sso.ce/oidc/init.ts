@@ -1,6 +1,6 @@
 import { Container } from '@n8n/di';
 import type { Application } from 'express';
-import { Logger } from 'n8n-core';
+import { Logger } from '@n8n/backend-common';
 
 import { OidcServiceCE } from './oidc.service';
 // The import of the controller is enough for n8n's decorator system to register it

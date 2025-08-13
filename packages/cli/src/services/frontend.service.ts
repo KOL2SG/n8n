@@ -22,7 +22,7 @@ import { LoadNodesAndCredentials } from '@/load-nodes-and-credentials';
 import { MfaService } from '@/mfa/mfa.service';
 import { isApiEnabled } from '@/public-api';
 import { PushConfig } from '@/push/push.config';
-import type { CommunityPackagesService } from '@/services/community-packages.service';
+
 import {
 	getCurrentAuthenticationMethod,
 	isOidcEnabled,
@@ -182,6 +182,8 @@ export class FrontendService {
 				oidc: {
 					loginEnabled: isOidcEnabled(), // Use isOidcEnabled() function which already checks the env variable
 					loginLabel: getOidcLoginLabel(),
+					loginUrl: `${this.urlService.getInstanceBaseUrl()}/${this.globalConfig.endpoints.rest}/sso/oidc/login`,
+					callbackUrl: `${this.urlService.getInstanceBaseUrl()}/${this.globalConfig.endpoints.rest}/sso/oidc/callback`,
 					redirectLoginToSso: shouldRedirectLoginToSso(),
 				},
 			},

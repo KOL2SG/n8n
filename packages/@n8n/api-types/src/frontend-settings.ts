@@ -89,18 +89,15 @@ export interface FrontendSettings {
 			loginEnabled: boolean;
 		};
 		oidc: {
+			loginLabel: string;
 			loginEnabled: boolean;
 			loginUrl: string;
 			callbackUrl: string;
+			redirectLoginToSso: boolean;
 		};
 		ldap: {
 			loginLabel: string;
 			loginEnabled: boolean;
-		};
-		oidc: {
-			loginLabel: string;
-			loginEnabled: boolean;
-			redirectLoginToSso: boolean;
 		};
 	};
 	publicApi: {

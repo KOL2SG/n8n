@@ -56,6 +56,7 @@ import '@/sso.ce/sso.config';
 import { getOidcEnabled } from '@/sso.ce/utils/config-helper';
 import { initializeOidcService } from '@/sso.ce/oidc/init';
 import { isOidcEnabled, shouldRedirectLoginToSso } from '@/sso.ce/sso-helpers';
+import '@/sso.ce/oidc/oidc.controller';
 import '@/controllers/user-settings.controller';
 import '@/controllers/workflow-statistics.controller';
 import '@/controllers/api-keys.controller';
@@ -89,6 +90,8 @@ export class Server extends AbstractServer {
 		private readonly instanceSettings: InstanceSettings,
 	) {
 		super();
+
+		console.log('SERVER CONSTRUCTOR: Main Server class instantiated with OIDC support');
 
 		this.testWebhooksEnabled = true;
 		this.webhooksEnabled = !this.globalConfig.endpoints.disableProductionWebhooksOnMainProcess;
@@ -168,16 +171,18 @@ export class Server extends AbstractServer {
 		// OIDC
 		// ----------------------------------------
 
-		try {
-			// in the short term, we load the OIDC module here to ensure it is initialized
-			// ideally we want to migrate this to a module and be able to load it dynamically
-			// when the license changes, but that requires some refactoring
-			const { OidcService } = await import('@/sso.ee/oidc/oidc.service.ee');
-			await Container.get(OidcService).init();
-			await import('@/sso.ee/oidc/routes/oidc.controller.ee');
-		} catch (error) {
-			this.logger.warn(`OIDC initialization failed: ${(error as Error).message}`);
-		}
+		// DISABLED: EE OIDC service to allow CE OIDC service to work
+		// User specifically requested OIDC functionality only in CE version
+		// try {
+		// 	// in the short term, we load the OIDC module here to ensure it is initialized
+		// 	// ideally we want to migrate this to a module and be able to load it dynamically
+		// 	// when the license changes, but that requires some refactoring
+		// 	const { OidcService } = await import('@/sso.ee/oidc/oidc.service.ee');
+		// 	await Container.get(OidcService).init();
+		// 	await import('@/sso.ee/oidc/routes/oidc.controller.ee');
+		// } catch (error) {
+		// 	this.logger.warn(`OIDC initialization failed: ${(error as Error).message}`);
+		// }
 
 		// ----------------------------------------
 		// Source Control
@@ -201,6 +206,7 @@ export class Server extends AbstractServer {
 	}
 
 	async configure(): Promise<void> {
+		this.logger.debug('SERVER: Configure method started');
 		if (this.globalConfig.endpoints.metrics.enable) {
 			const { PrometheusMetricsService } = await import('@/metrics/prometheus-metrics.service');
 			await Container.get(PrometheusMetricsService).init(this.app);
@@ -258,6 +264,18 @@ export class Server extends AbstractServer {
 		}
 
 		await handleMfaDisable();
+
+		// Initialize OIDC service if enabled
+		this.logger.debug('SERVER: About to initialize OIDC service...');
+		try {
+			await initializeOidcService(this.app);
+			this.logger.debug('SERVER: OIDC service initialization completed successfully');
+		} catch (error) {
+			this.logger.error('SERVER: OIDC service initialization failed:', {
+				error: error instanceof Error ? error.message : String(error),
+				stack: error instanceof Error ? error.stack : undefined,
+			});
+		}
 
 		await this.registerAdditionalControllers();
 

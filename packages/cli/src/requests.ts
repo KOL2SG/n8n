@@ -8,6 +8,8 @@ import type {
 	ListQueryDb,
 	WorkflowHistory,
 } from '@n8n/db';
+
+export type { AuthenticatedRequest };
 import type { AssignableGlobalRole, GlobalRole, ProjectRole, Scope } from '@n8n/permissions';
 import type {
 	ICredentialDataDecryptedObject,

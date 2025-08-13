@@ -113,16 +113,6 @@ export const useSSOStore = defineStore('sso', () => {
 	});
 	const isDefaultAuthenticationOidc = computed(() => settingsStore.isDefaultAuthenticationOidc);
 
-	const showSsoLoginButton = computed(
-		() =>
-			// SAML: Requires both enterprise license AND SAML config
-			(isSamlLoginEnabled.value &&
-				isEnterpriseSamlEnabled.value &&
-				isDefaultAuthenticationSaml.value) ||
-			// OIDC: Only needs to be enabled (no enterprise license required)
-			(isOidcLoginEnabled.value && isDefaultAuthenticationOidc.value),
-	);
-
 	// Determine which SSO type is active
 	const ssoType = computed(() => {
 		if (isOidcLoginEnabled.value && isDefaultAuthenticationOidc.value) {
@@ -137,20 +127,6 @@ export const useSSOStore = defineStore('sso', () => {
 		}
 		return null;
 	});
-
-	const getSSORedirectUrl = async () => {
-		if (ssoType.value === 'oidc') {
-			// For OIDC, redirect directly to the login endpoint
-			const baseUrl = settingsStore.settings.urlBaseEditor || window.location.origin;
-			return `${baseUrl}/rest/sso/oidc/login`;
-		} else {
-			// Existing SAML logic
-			return await ssoApi.initSSO(
-				rootStore.restApiContext,
-				typeof route.query?.redirect === 'string' ? route.query.redirect : '',
-			);
-		}
-	};
 
 	const toggleLoginEnabled = async (enabled: boolean) =>
 		await ssoApi.toggleSamlConfig(rootStore.restApiContext, { loginEnabled: enabled });
@@ -198,17 +174,6 @@ export const useSSOStore = defineStore('sso', () => {
 		oidcConfig.value = savedConfig;
 		return savedConfig;
 	};
-
-	const isOidcLoginEnabled = computed({
-		get: () => oidc.value.loginEnabled,
-		set: (value: boolean) => {
-			oidc.value.loginEnabled = value;
-		},
-	});
-
-	const isDefaultAuthenticationOidc = computed(
-		() => authenticationMethod.value === UserManagementAuthenticationMethod.Oidc,
-	);
 
 	/**
 	 * LDAP Configuration
@@ -272,10 +237,7 @@ export const useSSOStore = defineStore('sso', () => {
 		isDefaultAuthenticationSaml,
 		isOidcLoginEnabled,
 		isDefaultAuthenticationOidc,
-		showSsoLoginButton,
-		samlConfig,
 		ssoType,
-		getSSORedirectUrl,
 		getSamlMetadata,
 		getSamlConfig,
 		saveSamlConfig,
@@ -283,9 +245,7 @@ export const useSSOStore = defineStore('sso', () => {
 
 		oidc,
 		oidcConfig,
-		isOidcLoginEnabled,
 		isEnterpriseOidcEnabled,
-		isDefaultAuthenticationOidc,
 		getOidcConfig,
 		saveOidcConfig,
 

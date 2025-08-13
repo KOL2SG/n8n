@@ -1,4 +1,4 @@
-import type { MigrationContext, ReversibleMigration } from '@/databases/types';
+import type { MigrationContext, ReversibleMigration } from '../migration-types';
 
 export class AddOidcColumns1746000000000 implements ReversibleMigration {
 	async up({ schemaBuilder: { addColumns, column, createIndex } }: MigrationContext) {
