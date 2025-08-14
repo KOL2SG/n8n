@@ -1,9 +1,16 @@
 pipeline {
-    agent any
+    agent {
+        docker {
+            image 'node:20-alpine'
+            args '-u root:root'
+        }
+    }
     
     environment {
         NODE_VERSION = '20'
-        PNPM_VERSION = '9'
+        PNPM_VERSION = '10.12.1'
+        CI = 'true'
+        NODE_ENV = 'production'
     }
     
     stages {
@@ -16,21 +23,18 @@ pipeline {
         stage('Setup Node.js') {
             steps {
                 script {
-                    // Install Node.js and pnpm
+                    // Node.js is already available in the Docker image
+                    // Just install pnpm and verify versions
                     sh '''
-                        # Install Node.js if not available
-                        if ! command -v node &> /dev/null; then
-                            curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
-                            sudo apt-get install -y nodejs
-                        fi
-                        
                         # Install pnpm
-                        if ! command -v pnpm &> /dev/null; then
-                            npm install -g pnpm@9
-                        fi
+                        npm install -g pnpm@10.12.1
                         
                         # Verify versions
+                        echo "Node.js version:"
                         node --version
+                        echo "npm version:"
+                        npm --version
+                        echo "pnpm version:"
                         pnpm --version
                     '''
                 }
@@ -39,7 +43,14 @@ pipeline {
         
         stage('Install Dependencies') {
             steps {
-                sh 'pnpm install --frozen-lockfile'
+                script {
+                    // Install dependencies with better error handling
+                    sh '''
+                        echo "Installing dependencies with pnpm..."
+                        pnpm install --frozen-lockfile --prefer-offline
+                        echo "Dependencies installed successfully"
+                    '''
+                }
             }
         }
         
