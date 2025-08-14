@@ -2,7 +2,7 @@ pipeline {
     agent any
     
     tools {
-        nodejs '20'  // Assumes Jenkins has NodeJS plugin with Node 20 configured
+        nodejs 'Node-20.15'  // Use the actual NodeJS installation name from Jenkins
     }
     
     environment {
