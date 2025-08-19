@@ -1,0 +1,146 @@
+ARG NODE_VERSION=22
+ARG BUILD_TYPE=production
+
+# Multi-stage build for both development and production
+FROM node:${NODE_VERSION}-alpine AS base
+
+# Install system dependencies
+RUN apk add --no-cache \
+    git \
+    python3 \
+    make \
+    g++ \
+    cairo-dev \
+    jpeg-dev \
+    pango-dev \
+    giflib-dev \
+    librsvg-dev \
+    pixman-dev \
+    pkgconfig \
+    tini \
+    curl \
+    wget \
+    openssl \
+    ca-certificates
+
+# Install pnpm
+RUN corepack enable && corepack prepare pnpm@latest --activate
+
+# Set working directory
+WORKDIR /app
+
+# Copy package files for dependency installation
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY turbo.json ./
+COPY patches/ ./patches/
+
+# Copy package.json files from packages
+COPY packages/*/package.json ./packages/*/
+COPY packages/@*/*/package.json ./packages/@*/*/
+
+# Install dependencies with cache mounts
+RUN --mount=type=cache,id=pnpm-store,target=/root/.local/share/pnpm/store \
+    --mount=type=cache,id=pnpm-metadata,target=/root/.cache/pnpm/metadata \
+    pnpm install --no-frozen-lockfile
+
+# Copy source code
+COPY . .
+
+# Build the application
+RUN pnpm build
+
+# Production runtime stage
+FROM node:${NODE_VERSION}-alpine AS runtime
+
+# Install runtime dependencies and debugging tools
+RUN apk add --no-cache \
+    cairo \
+    jpeg \
+    pango \
+    giflib \
+    librsvg \
+    pixman \
+    tini \
+    su-exec \
+    curl \
+    wget \
+    iperf3 \
+    bind-tools \
+    traceroute \
+    mtr \
+    nmap \
+    iproute2 \
+    tcpdump \
+    netcat-openbsd \
+    busybox-extras \
+    htop \
+    jq \
+    openssl \
+    ca-certificates
+
+# Handle existing node user gracefully
+RUN if ! getent group node >/dev/null 2>&1; then \
+        addgroup -g 1000 node; \
+    fi && \
+    if ! id node >/dev/null 2>&1; then \
+        adduser -u 1000 -G node -s /bin/sh -D node; \
+    fi
+
+# Set working directory
+WORKDIR /home/node
+
+# Copy built application from build stage
+COPY --from=base --chown=node:node /app/packages/cli/dist /home/node/n8n/
+COPY --from=base --chown=node:node /app/packages/cli/bin /home/node/n8n/bin/
+COPY --from=base --chown=node:node /app/packages/cli/package.json /home/node/n8n/
+COPY --from=base --chown=node:node /app/packages/core/dist /home/node/n8n/node_modules/n8n-core/
+COPY --from=base --chown=node:node /app/packages/workflow/dist /home/node/n8n/node_modules/n8n-workflow/
+COPY --from=base --chown=node:node /app/packages/nodes-base/dist /home/node/n8n/node_modules/n8n-nodes-base/
+COPY --from=base --chown=node:node /app/node_modules /home/node/n8n/node_modules/
+
+# Install production dependencies
+WORKDIR /home/node/n8n
+RUN npm install --production --no-package-lock --ignore-scripts || true && \
+    npm rebuild sqlite3 2>/dev/null || true
+
+# Create symlink and set permissions
+RUN ln -sf /home/node/n8n/bin/n8n /usr/local/bin/n8n && \
+    mkdir -p /home/node/.n8n && \
+    chown -R node:node /home/node
+
+# Environment variables
+ENV NODE_ENV=production
+ENV N8N_USER_FOLDER=/home/node/.n8n
+ENV N8N_HOST=0.0.0.0
+ENV N8N_PORT=5678
+ENV N8N_PROTOCOL=http
+ENV N8N_LOG_LEVEL=info
+
+# OIDC environment variables (disabled by default)
+ENV N8N_SSO_OIDC_ENABLED=false
+ENV N8N_OIDC_SCOPES="openid email profile"
+ENV N8N_OIDC_JIT_PROVISIONING=true
+ENV N8N_OIDC_REDIRECT_LOGIN_TO_SSO=false
+
+# Expose port
+EXPOSE 5678
+
+# Switch to non-root user
+USER node
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+    CMD curl -f http://localhost:5678/healthz || wget --no-verbose --tries=1 --spider http://localhost:5678/healthz || exit 1
+
+# Use tini as init system
+ENTRYPOINT ["tini", "--"]
+
+# Default command
+CMD ["n8n", "start"]
+
+# Labels
+LABEL org.opencontainers.image.title="n8n Unified Build" \
+      org.opencontainers.image.description="n8n Workflow Automation with OIDC Support and Debug Tools" \
+      org.opencontainers.image.source="https://github.com/n8n-io/n8n" \
+      org.opencontainers.image.url="https://n8n.io" \
+      org.opencontainers.image.vendor="n8n"

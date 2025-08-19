@@ -1,0 +1,65 @@
+version: '3.8'
+
+services:
+  n8n:
+    build:
+      context: .
+      dockerfile: Dockerfile.unified
+      args:
+        BUILD_TYPE: ${BUILD_TYPE:-production}
+    container_name: n8n-unified
+    ports:
+      - "${N8N_PORT:-5678}:5678"
+    environment:
+      # Basic configuration
+      - N8N_HOST=0.0.0.0
+      - N8N_PORT=5678
+      - N8N_PROTOCOL=${N8N_PROTOCOL:-http}
+      - NODE_ENV=${NODE_ENV:-production}
+      
+      # OIDC Configuration (optional)
+      - N8N_SSO_OIDC_ENABLED=${N8N_SSO_OIDC_ENABLED:-false}
+      - N8N_OIDC_ISSUER_URL=${N8N_OIDC_ISSUER_URL:-}
+      - N8N_OIDC_CLIENT_ID=${N8N_OIDC_CLIENT_ID:-}
+      - N8N_OIDC_CLIENT_SECRET=${N8N_OIDC_CLIENT_SECRET:-}
+      - N8N_OIDC_REDIRECT_URL=${N8N_OIDC_REDIRECT_URL:-http://localhost:5678/rest/sso/oidc/callback}
+      - N8N_OIDC_SCOPES=${N8N_OIDC_SCOPES:-openid email profile}
+      - N8N_OIDC_JIT_PROVISIONING=${N8N_OIDC_JIT_PROVISIONING:-true}
+      - N8N_OIDC_REDIRECT_LOGIN_TO_SSO=${N8N_OIDC_REDIRECT_LOGIN_TO_SSO:-false}
+      
+      # Database configuration
+      - DB_TYPE=${DB_TYPE:-sqlite}
+      - DB_SQLITE_DATABASE=/home/node/.n8n/database.sqlite
+      
+      # Logging
+      - N8N_LOG_LEVEL=${N8N_LOG_LEVEL:-info}
+      
+    volumes:
+      - n8n_data:/home/node/.n8n
+    restart: unless-stopped
+    
+    # Health check
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5678/healthz"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  # Optional PostgreSQL database
+  postgres:
+    image: postgres:15-alpine
+    container_name: n8n-postgres
+    environment:
+      - POSTGRES_DB=${POSTGRES_DB:-n8n}
+      - POSTGRES_USER=${POSTGRES_USER:-n8n}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-n8n}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    restart: unless-stopped
+    profiles:
+      - postgres
+
+volumes:
+  n8n_data:
+  postgres_data:
