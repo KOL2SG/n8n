@@ -8,7 +8,7 @@ import * as ldapApi from '@n8n/rest-api-client/api/ldap';
 import type { LdapConfig } from '@n8n/rest-api-client/api/ldap';
 import type { IDataObject } from 'n8n-workflow';
 import type { UserManagementAuthenticationMethod } from '@/Interface';
-import { useSettingsStore } from '@/stores/settings';
+import { useSettingsStore } from '@/stores/settings.store';
 
 export const SupportedProtocols = {
 	SAML: 'saml',
