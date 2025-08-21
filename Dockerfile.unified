@@ -38,13 +38,13 @@ COPY patches/ ./patches/
 COPY packages/*/package.json ./packages/*/
 COPY packages/@*/*/package.json ./packages/@*/*/
 
+# Copy source code first to resolve workspace dependencies
+COPY . .
+
 # Install dependencies with cache mounts
 RUN --mount=type=cache,id=pnpm-store,target=/root/.local/share/pnpm/store \
     --mount=type=cache,id=pnpm-metadata,target=/root/.cache/pnpm/metadata \
-    pnpm install --no-frozen-lockfile
-
-# Copy source code
-COPY . .
+    pnpm install --frozen-lockfile
 
 # Build the application
 RUN pnpm build

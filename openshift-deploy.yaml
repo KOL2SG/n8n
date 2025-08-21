@@ -1,0 +1,126 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: n8n-oidc
+  labels:
+    app: n8n-oidc
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: n8n-oidc
+  template:
+    metadata:
+      labels:
+        app: n8n-oidc
+    spec:
+      containers:
+      - name: n8n
+        image: your-registry/n8n-oidc:latest  # Update this with your registry
+        ports:
+        - containerPort: 5678
+        env:
+        # Proxy configuration for Bosch network
+        - name: GLOBAL_AGENT_HTTPS_PROXY
+          value: "http://rb-proxy-emea.internal.bosch.cloud:8080"
+        - name: GLOBAL_AGENT_HTTP_PROXY
+          value: "http://rb-proxy-emea.internal.bosch.cloud:8080"
+        - name: GLOBAL_AGENT_NO_PROXY
+          value: "127.0.0.1,localhost,.cluster.local,.svc,.internal.bosch.cloud,.inside.bosch.cloud,.bgn,.de.bosch.com,.bosch.com,172.30.0.0/16,10.128.0.0/14,192.168.0.0/16,10.140.0.0/17,10.140.128.0/17,10.143.0.0/17,10.140.250.30,10.140.241.30,10.140.233.30,10.143.57.30"
+        
+        # OIDC Configuration
+        - name: N8N_SSO_OIDC_ENABLED
+          value: "true"
+        - name: N8N_OIDC_CLIENT_ID
+          value: "dd03a019-3ebc-42bd-9992-f1cccd461f20"
+        - name: N8N_OIDC_CLIENT_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: n8n-oidc-secret
+              key: client-secret
+        - name: N8N_OIDC_ISSUER_URL
+          value: "https://login.microsoftonline.com/0ae51e19-07c8-4e4b-bb6d-648ee58410f4/v2.0/"
+        - name: N8N_OIDC_JIT_PROVISIONING
+          value: "true"
+        - name: N8N_OIDC_REDIRECT_URL
+          value: "https://your-openshift-route/rest/sso/oidc/callback"  # Update with your route
+        
+        # n8n Configuration
+        - name: N8N_HOST
+          value: "0.0.0.0"
+        - name: N8N_PORT
+          value: "5678"
+        - name: N8N_PROTOCOL
+          value: "https"
+        - name: WEBHOOK_URL
+          value: "https://your-openshift-route/"  # Update with your route
+        
+        # Fix the command issue we encountered
+        command: ["/home/node/n8n/bin/n8n"]
+        args: ["start"]
+        
+        volumeMounts:
+        - name: n8n-data
+          mountPath: /home/node/.n8n
+        
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "250m"
+          limits:
+            memory: "1Gi"
+            cpu: "500m"
+      
+      volumes:
+      - name: n8n-data
+        persistentVolumeClaim:
+          claimName: n8n-data-pvc
+
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: n8n-oidc-secret
+type: Opaque
+stringData:
+  client-secret: "56~8Q~WNfIqTg6WyzGG.CSCdSz1CKPI8o_glSbVD"
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: n8n-data-pvc
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 5Gi
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: n8n-oidc-service
+spec:
+  selector:
+    app: n8n-oidc
+  ports:
+  - port: 5678
+    targetPort: 5678
+  type: ClusterIP
+
+---
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  name: n8n-oidc-route
+spec:
+  to:
+    kind: Service
+    name: n8n-oidc-service
+  port:
+    targetPort: 5678
+  tls:
+    termination: edge
+    insecureEdgeTerminationPolicy: Redirect
