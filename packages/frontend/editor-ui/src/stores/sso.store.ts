@@ -92,7 +92,7 @@ export const useSSOStore = defineStore('sso', () => {
 			(isSamlLoginEnabled.value &&
 				isEnterpriseSamlEnabled.value &&
 				isDefaultAuthenticationSaml.value) ||
-			(isOidcLoginEnabled.value && isDefaultAuthenticationOidc.value), // Removed enterprise check for OIDC
+			isDefaultAuthenticationOidc.value, // Show OIDC button regardless of N8N_SSO_OIDC_ENABLED
 	);
 
 	const getSSORedirectUrl = async (existingRedirect?: string) =>
