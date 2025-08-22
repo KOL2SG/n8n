@@ -24,7 +24,7 @@ RUN apk add --no-cache \
     ca-certificates
 
 # Install pnpm
-RUN corepack enable && corepack prepare pnpm@latest --activate
+RUN corepack enable && corepack prepare pnpm@10.12.1 --activate
 
 # Set working directory
 WORKDIR /app
@@ -37,10 +37,11 @@ COPY patches/ ./patches/
 # Copy all source code to resolve workspace dependencies
 COPY . .
 
-# Install dependencies with cache mounts
-RUN --mount=type=cache,id=pnpm-store,target=/root/.local/share/pnpm/store \
-    --mount=type=cache,id=pnpm-metadata,target=/root/.cache/pnpm/metadata \
-    pnpm install --no-frozen-lockfile
+# Remove problematic langchain nodes package to avoid sqlite3 compilation issues
+RUN rm -rf packages/@n8n/nodes-langchain
+
+# Install dependencies - pnpm is required for workspace support
+RUN pnpm install --frozen-lockfile --ignore-scripts
 
 # Build the application
 RUN pnpm build
