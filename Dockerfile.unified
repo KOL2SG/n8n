@@ -1,10 +1,9 @@
 ARG NODE_VERSION=22
-ARG BUILD_TYPE=production
 
-# Multi-stage build for both development and production
+# Multi-stage build for production
 FROM node:${NODE_VERSION}-alpine AS base
 
-# Install system dependencies
+# Install build dependencies
 RUN apk add --no-cache \
     git \
     python3 \
@@ -16,12 +15,7 @@ RUN apk add --no-cache \
     giflib-dev \
     librsvg-dev \
     pixman-dev \
-    pkgconfig \
-    tini \
-    curl \
-    wget \
-    openssl \
-    ca-certificates
+    pkgconfig
 
 # Install pnpm
 RUN corepack enable && corepack prepare pnpm@10.12.1 --activate
@@ -49,7 +43,7 @@ RUN pnpm build
 # Production runtime stage
 FROM node:${NODE_VERSION}-alpine AS runtime
 
-# Install runtime dependencies and debugging tools
+# Install only essential runtime dependencies
 RUN apk add --no-cache \
     cairo \
     jpeg \
@@ -60,22 +54,10 @@ RUN apk add --no-cache \
     tini \
     su-exec \
     curl \
-    wget \
-    iperf3 \
-    bind-tools \
-    traceroute \
-    mtr \
-    nmap \
-    iproute2 \
-    tcpdump \
-    netcat-openbsd \
-    busybox-extras \
-    htop \
-    jq \
     openssl \
     ca-certificates
 
-# Handle existing node user gracefully
+# Create node user if it doesn't exist
 RUN if ! getent group node >/dev/null 2>&1; then \
         addgroup -g 1000 node; \
     fi && \
@@ -84,26 +66,34 @@ RUN if ! getent group node >/dev/null 2>&1; then \
     fi
 
 # Set working directory
-WORKDIR /home/node
-
-# Copy built application from build stage
-COPY --from=base --chown=node:node /app/packages/cli/dist /home/node/n8n/
-COPY --from=base --chown=node:node /app/packages/cli/bin /home/node/n8n/bin/
-COPY --from=base --chown=node:node /app/packages/cli/package.json /home/node/n8n/
-COPY --from=base --chown=node:node /app/packages/core/dist /home/node/n8n/node_modules/n8n-core/
-COPY --from=base --chown=node:node /app/packages/workflow/dist /home/node/n8n/node_modules/n8n-workflow/
-COPY --from=base --chown=node:node /app/packages/nodes-base/dist /home/node/n8n/node_modules/n8n-nodes-base/
-COPY --from=base --chown=node:node /app/node_modules /home/node/n8n/node_modules/
-
-# Install production dependencies
 WORKDIR /home/node/n8n
-RUN npm install --production --no-package-lock --ignore-scripts || true && \
-    npm rebuild sqlite3 2>/dev/null || true
+
+# Copy CLI package with all necessary files
+COPY --from=base --chown=node:node /app/packages/cli/dist ./dist/
+COPY --from=base --chown=node:node /app/packages/cli/bin ./bin/
+COPY --from=base --chown=node:node /app/packages/cli/package.json ./package.json
+
+# Copy ALL @n8n workspace packages (comprehensive approach)
+# This ensures we have all workspace dependencies that CLI might need
+COPY --from=base --chown=node:node /app/packages/@n8n ./node_modules/@n8n/
+
+# Copy core workspace packages with complete structure
+# These are the main packages referenced in CLI's package.json
+COPY --from=base --chown=node:node /app/packages/core ./node_modules/n8n-core/
+COPY --from=base --chown=node:node /app/packages/workflow ./node_modules/n8n-workflow/
+COPY --from=base --chown=node:node /app/packages/nodes-base ./node_modules/n8n-nodes-base/
+COPY --from=base --chown=node:node /app/packages/frontend/editor-ui ./node_modules/n8n-editor-ui/
+
+# Copy additional workspace packages that might be needed
+COPY --from=base --chown=node:node /app/packages/testing ./node_modules/n8n-testing/
+
+# Copy the main node_modules for runtime dependencies
+# This includes all external npm packages
+COPY --from=base --chown=node:node /app/node_modules ./node_modules/
 
 # Create symlink and set permissions
 RUN ln -sf /home/node/n8n/bin/n8n /usr/local/bin/n8n && \
-    mkdir -p /home/node/.n8n && \
-    chown -R node:node /home/node
+    mkdir -p /home/node/.n8n
 
 # Environment variables
 ENV NODE_ENV=production
@@ -127,7 +117,7 @@ USER node
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
-    CMD curl -f http://localhost:5678/healthz || wget --no-verbose --tries=1 --spider http://localhost:5678/healthz || exit 1
+    CMD curl -f http://localhost:5678/healthz || exit 1
 
 # Use tini as init system
 ENTRYPOINT ["tini", "--"]
@@ -136,8 +126,8 @@ ENTRYPOINT ["tini", "--"]
 CMD ["n8n", "start"]
 
 # Labels
-LABEL org.opencontainers.image.title="n8n Unified Build" \
-      org.opencontainers.image.description="n8n Workflow Automation with OIDC Support and Debug Tools" \
+LABEL org.opencontainers.image.title="n8n Production Build" \
+      org.opencontainers.image.description="n8n Workflow Automation with OIDC Support - Complete Dependencies" \
       org.opencontainers.image.source="https://github.com/n8n-io/n8n" \
       org.opencontainers.image.url="https://n8n.io" \
       org.opencontainers.image.vendor="n8n"
