@@ -73,23 +73,29 @@ COPY --from=base --chown=node:node /app/packages/cli/dist ./dist/
 COPY --from=base --chown=node:node /app/packages/cli/bin ./bin/
 COPY --from=base --chown=node:node /app/packages/cli/package.json ./package.json
 
-# Copy ALL @n8n workspace packages (comprehensive approach)
-# This ensures we have all workspace dependencies that CLI might need
-COPY --from=base --chown=node:node /app/packages/@n8n ./node_modules/@n8n/
+# Copy the main node_modules for runtime dependencies
+# This includes all external npm packages and workspace packages via pnpm links
+COPY --from=base --chown=node:node /app/node_modules ./node_modules/
 
-# Copy core workspace packages with complete structure
+# Copy @n8n workspace packages with dist and package.json files
+# Copy each @n8n package individually to avoid conflicts
+COPY --from=base --chown=node:node /app/packages/@n8n/backend-common/dist ./node_modules/@n8n/backend-common/dist/
+COPY --from=base --chown=node:node /app/packages/@n8n/backend-common/package.json ./node_modules/@n8n/backend-common/
+COPY --from=base --chown=node:node /app/packages/@n8n/constants/dist ./node_modules/@n8n/constants/dist/
+COPY --from=base --chown=node:node /app/packages/@n8n/constants/package.json ./node_modules/@n8n/constants/
+COPY --from=base --chown=node:node /app/packages/@n8n/config/dist ./node_modules/@n8n/config/dist/
+COPY --from=base --chown=node:node /app/packages/@n8n/config/package.json ./node_modules/@n8n/config/
+COPY --from=base --chown=node:node /app/packages/@n8n/permissions/dist ./node_modules/@n8n/permissions/dist/
+COPY --from=base --chown=node:node /app/packages/@n8n/permissions/package.json ./node_modules/@n8n/permissions/
+COPY --from=base --chown=node:node /app/packages/@n8n/api-types/dist ./node_modules/@n8n/api-types/dist/
+COPY --from=base --chown=node:node /app/packages/@n8n/api-types/package.json ./node_modules/@n8n/api-types/
+
+# Copy core workspace packages with complete structure to ensure proper resolution
 # These are the main packages referenced in CLI's package.json
 COPY --from=base --chown=node:node /app/packages/core ./node_modules/n8n-core/
 COPY --from=base --chown=node:node /app/packages/workflow ./node_modules/n8n-workflow/
 COPY --from=base --chown=node:node /app/packages/nodes-base ./node_modules/n8n-nodes-base/
 COPY --from=base --chown=node:node /app/packages/frontend/editor-ui ./node_modules/n8n-editor-ui/
-
-# Copy additional workspace packages that might be needed
-COPY --from=base --chown=node:node /app/packages/testing ./node_modules/n8n-testing/
-
-# Copy the main node_modules for runtime dependencies
-# This includes all external npm packages
-COPY --from=base --chown=node:node /app/node_modules ./node_modules/
 
 # Create symlink and set permissions
 RUN ln -sf /home/node/n8n/bin/n8n /usr/local/bin/n8n && \

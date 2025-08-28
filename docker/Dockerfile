@@ -121,10 +121,10 @@ ENV N8N_PROTOCOL=http
 ENV N8N_LOG_LEVEL=info
 
 # OIDC environment variables (disabled by default)
-ENV N8N_SSO_OIDC_ENABLED=false
+ENV N8N_SSO_OIDC_ENABLED=true
 ENV N8N_OIDC_SCOPES="openid email profile"
 ENV N8N_OIDC_JIT_PROVISIONING=true
-ENV N8N_OIDC_REDIRECT_LOGIN_TO_SSO=false
+ENV N8N_OIDC_REDIRECT_LOGIN_TO_SSO=true
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \

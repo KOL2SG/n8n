@@ -8,7 +8,7 @@ echo "🚀 Deploying n8n with OIDC to OpenShift..."
 
 # Step 1: Build and tag the Docker image
 echo "📦 Building Docker image..."
-docker build -f Dockerfile.unified -t n8n-oidc:latest .
+docker build -f docker/Dockerfile -t n8n-oidc:latest .
 
 # Step 2: Tag for OpenShift registry (update with your registry)
 echo "🏷️  Tagging image for OpenShift registry..."
