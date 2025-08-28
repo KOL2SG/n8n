@@ -6,6 +6,12 @@
     "node": ">=22.16",
     "pnpm": ">=10.2.1"
   },
+  "name": "@n8n/n8n-workflow",
+  "version": "1.0.0",
+  "publishConfig": {
+    "registry": "https://artifactory.boschdevcloud.com/artifactory/api/n8n-local/",
+    "access": "restricted"
+  },
   "packageManager": "pnpm@10.12.1",
   "scripts": {
     "prepare": "node scripts/prepare.mjs",
