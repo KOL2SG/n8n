@@ -6,7 +6,7 @@
 set -e
 
 CONTAINER_NAME="n8n-quick"
-IMAGE_NAME="n8n:latest"  # Use local custom build
+IMAGE_NAME="n8n-sso-w-proxy:latest"  # Use custom build with SSO and proxy support
 #REGISTRY_IMAGE="artifactory.boschdevcloud.com/n8n-local/n8n-oidc:latest"
 PORT=${N8N_PORT:-5678}
 
